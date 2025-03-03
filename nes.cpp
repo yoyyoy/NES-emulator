@@ -445,7 +445,7 @@ void NES::ParseOpcode(uint8_t opcode, Instruction& instruction, AddressMode& add
     }
 }
 
-uint16_t NES::GetOperandValue(AddressMode addressMode)
+uint16_t NES::GetOperandValue(AddressMode addressMode, uint16_t &address)
 {
     uint16_t address;
     switch(addressMode)
@@ -467,13 +467,13 @@ uint16_t NES::GetOperandValue(AddressMode addressMode)
         address = Read16Bit(registers.programCounter, true);
         return Read16Bit(address, false);
     case INDIRECT_X_INDEX:
-        address = Read8Bit(registers.programCounter, true);
-        address = Read16Bit((address+registers.Xregister)%256, false);
+        address = (Read8Bit(registers.programCounter, true) + registers.Xregister) % 256;
+        address = Read16Bit(address, false);
         return Read8Bit(address,false);
     case INDIRECT_Y_INDEX:
         address = Read8Bit(registers.programCounter, true);
-        address = Read16Bit(address, false);
-        return Read8Bit(address, false) + registers.Yregister;
+        address = Read16Bit(address, false) + registers.Yregister;
+        return Read8Bit(address, false);
     case RELATIVE: return Read8Bit(registers.programCounter, true);
     case ZEROPAGE:
         address = Read8Bit(registers.programCounter, true);
@@ -487,20 +487,363 @@ uint16_t NES::GetOperandValue(AddressMode addressMode)
     }
 }
 
-void NES::Execute(Instruction instruction, AddressMode addressMode)
+void NES::SetProcessorStatusBit(int bitNum, bool set)
 {
-    uint16_t operandValue = GetOperandValue(addressMode);
-    uint32_t result;
+    uint8_t setBit = 1 << bitNum;
+    uint8_t mask = ~setBit;
+    if(set)
+        registers.processorStatus |= setBit;
+    else
+        registers.processorStatus &= mask;
+}
+
+
+
+void NES::UpdateProcessorStatus(uint16_t result, int32_t signedResult, Instruction instruction)
+{
     switch(instruction)
     {
     case ADC:
+        SetProcessorStatusBit(OVERFLOW, signedResult > 127 || signedResult < -128);
+    case ASL:
+    case ROL:
+        SetProcessorStatusBit(CARRY, result > 255);
+    case AND:
+    case DEC:
+    case DEX:
+    case DEY:
+    case EOR:
+    case INC:
+    case INX:
+    case INY:
+    case LDA:
+    case LDX:
+    case LDY:
+    case LSR:
+    case ORA:
+    case PLA:
+    case ROR:
+    case TAX:
+    case TAY:
+    case TSX:
+    case TXA:
+    case TYA:
+        SetProcessorStatusBit(ZERO, (result & 0xFF)==0);
+        SetProcessorStatusBit(NEGATIVE, result & 0b10000000);
+    break;
+    case CMP:
+    case CPX:
+    case CPY:
+        SetProcessorStatusBit(CARRY, (int16_t)result > 0);
+        SetProcessorStatusBit(ZERO, (result & 0xFF) ==0);
+        SetProcessorStatusBit(NEGATIVE, result & 0b10000000);
+    break;
+    case BIT:
+        SetProcessorStatusBit(NEGATIVE, result & 0b10000000);
+        SetProcessorStatusBit(OVERFLOW, result & 0b01000000);
+        SetProcessorStatusBit(ZERO, (result & registers.accumulator)==0);
+    break;
+    case BRK:
+        //break flag is weird and doesn't really exist? TODO read more documentation on this
+        break;
+    case CLC:
+        SetProcessorStatusBit(CARRY, false);
+    break;
+    case CLD:
+        SetProcessorStatusBit(DECIMAL, false);
+    break;
+    case CLI:
+        SetProcessorStatusBit(INTERRUPT_DISABLE, false);
+    break;
+    case CLV:
+        SetProcessorStatusBit(OVERFLOW, false);
+    break;
+    case SEC:
+        SetProcessorStatusBit(CARRY, true);
+    break;
+    case SED:
+        SetProcessorStatusBit(DECIMAL, true);
+    break;
+    case SEI:
+        SetProcessorStatusBit(INTERRUPT_DISABLE, true);
+    break;
+    }
+}
+
+void NES::Execute(Instruction instruction, AddressMode addressMode)
+{
+    uint16_t address;
+    uint16_t operandValue = GetOperandValue(addressMode, address);
+    uint32_t result;
+    int32_t signedResult;
+    switch(instruction)
+    {//TODO potential improvement. add to PPUcycles more accurately, taking into account address mode and whatever
+    case ADC:
         result = (registers.processorStatus & 1) + registers.accumulator + operandValue;
-        UpdateProcessorStatus(result, 0b11000011);
+        signedResult = (int8_t)registers.accumulator + (int8_t)operandValue + (registers.processorStatus & 1);
         registers.accumulator=result;
+        PPUcycles+=6;
     break;
     case AND:
+        registers.accumulator &= operandValue;
+        result = registers.accumulator;
+        PPUcycles+=6;
+    break;
+    case ASL:
+        result = operandValue << 1;
+        if(addressMode == ACCUMULATOR)
+            registers.accumulator=result;
+        else
+            Write8Bit(address, result);
+        PPUcycles+=6;
+    break;
+    case BCC:
+        if(!(registers.processorStatus & 1))
+            registers.programCounter += (int8_t) operandValue;
+        PPUcycles+=6;
+    break;
+    case BCS:
+        if (registers.processorStatus & 1)
+            registers.programCounter += (int8_t)operandValue;
+        PPUcycles += 6;
+    break;
+    case BEQ:
+        if (registers.processorStatus & 0b00000010)
+            registers.programCounter += (int8_t)operandValue;
+        PPUcycles += 6;
+    break;
+    case BIT:
+        result = registers.accumulator & operandValue;
+        PPUcycles+=9;
+    break;
+    case BMI:
+        if (registers.processorStatus & 0b10000000)
+            registers.programCounter += (int8_t)operandValue;
+        PPUcycles += 6;
+    break;
+    case BNE:
+        if (!(registers.processorStatus & 0b00000010))
+            registers.programCounter += (int8_t)operandValue;
+        PPUcycles += 6;
+    break;
+    case BPL:
+        if (!(registers.processorStatus & 0b10000000))
+            registers.programCounter += (int8_t)operandValue;
+        PPUcycles += 6;
+    break;
+    case BRK:
+        if(!(registers.processorStatus & 0b00000100))
+        {
+            PushStack16Bit(registers.programCounter);
+            PushStack8Bit(registers.processorStatus);
+            registers.programCounter = Read16Bit(0xFFFE, false);
+        }
+
+        PPUcycles+=21;
+    break;
+    case BVC:
+        if (!(registers.processorStatus & 0b01000000))
+            registers.programCounter += (int8_t)operandValue;
+        PPUcycles += 6;
+    break;
+    case BVS:
+        if (registers.processorStatus & 0b01000000)
+            registers.programCounter += (int8_t)operandValue;
+        PPUcycles += 6;
+    break;
+    case CMP:
+        result = registers.accumulator - operandValue;
+        PPUcycles += 6;
+    break;
+    case CPX:
+        result = registers.Xregister - operandValue;
+        PPUcycles += 6;
+    break;
+    case CPY:
+        result = registers.Yregister - operandValue;
+        PPUcycles += 6;
+    break;
+    case DEC:
+        result = (operandValue-1);
+        Write8Bit(address, result);
+        PPUcycles+=15;
+    break;
+    case DEX:
+        result = --registers.Xregister;
+        PPUcycles+=6;
+    break;
+    case DEY:
+        result = --registers.Yregister;
+        PPUcycles+=6;
+    break;
+    case EOR:
+        registers.accumulator ^= operandValue;
+        result = registers.accumulator;
+        PPUcycles+=6;
+    break;
+    case INC:
+        result = (operandValue + 1);
+        Write8Bit(address, result);
+        PPUcycles += 15;
+        break;
+    case INX:
+        result = ++registers.Xregister;
+        PPUcycles += 6;
+        break;
+    case INY:
+        result = ++registers.Yregister;
+        PPUcycles += 6;
+        break;
+    case JMP:
+        registers.programCounter = operandValue;
+        PPUcycles+=9;
+    break;
+    case JSR:
+        PushStack16Bit(registers.programCounter);
+        registers.programCounter = operandValue;
+        PPUcycles +=18;
+    break;
+    case LDA:
+        result = operandValue;
+        registers.accumulator = operandValue;
+        PPUcycles+=6;
+    break;
+    case LDX:
+        result = operandValue;
+        registers.Xregister = operandValue;
+        PPUcycles += 6;
+        break;
+    case LDY:
+        result = operandValue;
+        registers.Yregister = operandValue;
+        PPUcycles += 6;
+        break;
+    case LSR: 
+        //some information is lost before we make it to UpdateProcessorStatus. have to do it here
+        SetProcessorStatusBit(CARRY, operandValue&1);
+
+        result = operandValue >> 1;
+        if (addressMode == ACCUMULATOR)
+            registers.accumulator = result;
+        else
+            Write8Bit(address, result);
+        PPUcycles += 6;
+    break;
+    case ORA:
+        registers.accumulator |= operandValue;
+        result = registers.accumulator;
+        PPUcycles += 6;
+        break;
+    case PHA:
+        PushStack8Bit(registers.accumulator);
+        PPUcycles+=9;
+    break;
+    case PHP:
+        PushStack8Bit(registers.processorStatus);
+        PPUcycles+=9;
+    break;
+    case PLA:
+        registers.accumulator = PullStack8Bit();
+        result = registers.accumulator;
+        PPUcycles+=12;
+    break;
+    case PLP:
+        registers.processorStatus = PullStack8Bit();
+        PPUcycles+=12;
+    break;
+    case ROL:
+        result = (operandValue << 1) | (registers.processorStatus & 1);
+        if (addressMode == ACCUMULATOR)
+            registers.accumulator = result;
+        else
+            Write8Bit(address, result);
+        PPUcycles += 6;
+    break;
+    case ROR:
+        //some information is lost before we make it to UpdateProcessorStatus. have to do it here
         
+        result = (operandValue >> 1) | ((registers.processorStatus & 1) << 7);
+        if (addressMode == ACCUMULATOR)
+            registers.accumulator = result;
+        else
+            Write8Bit(address, result);
+
+        SetProcessorStatusBit(CARRY, operandValue & 1);
+
+        PPUcycles += 6;
+    break;
+    case RTI:
+        registers.processorStatus = PullStack8Bit();
+        registers.programCounter = PullStack16Bit();
+        PPUcycles+=18;
+    break;
+    case RTS:
+        registers.programCounter = PullStack16Bit();
+        PPUcycles += 18;
+    break;
+    case SBC:
+        result = registers.accumulator - operandValue - (1-(registers.processorStatus & 1));
+        registers.accumulator = result;
+        signedResult = (int8_t)registers.accumulator - (int8_t)operandValue - (1-(registers.processorStatus & 1));
+        //looks like a pain to do update in UpdateProcessorStatus so just do it here
+        SetProcessorStatusBit(CARRY, operandValue + (1 - (registers.processorStatus & 1)) <= registers.accumulator);
+        SetProcessorStatusBit(ZERO, registers.accumulator==0);
+        SetProcessorStatusBit(OVERFLOW, signedResult > 127 || signedResult < -128);
+        SetProcessorStatusBit(NEGATIVE, registers.accumulator & 0b10000000);
+        PPUcycles += 6;
+        break;
+    case STA:
+        Write8Bit(address, registers.accumulator);
+        PPUcycles+=9;
+    break;
+    case STX:
+        Write8Bit(address, registers.Xregister);
+        PPUcycles += 9;
+    break;
+    case STY:
+        Write8Bit(address, registers.Yregister);
+        PPUcycles += 9;
+    break;
+    case TAX:
+        result= registers.accumulator;
+        registers.Xregister=registers.accumulator;
+        PPUcycles+=6;
+    break;
+    case TAY:
+        result = registers.accumulator;
+        registers.Yregister = registers.accumulator;
+        PPUcycles += 6;
+    break;
+    case TSX:
+        result = registers.stackPointer;
+        registers.Xregister = registers.stackPointer;
+        PPUcycles += 6;
+    break;
+    case TXA:
+        result = registers.Xregister;
+        registers.accumulator = registers.Xregister;
+        PPUcycles += 6;
+    break;
+    case TXS:
+        registers.stackPointer = registers.Xregister;
+        PPUcycles += 6;
+    break;
+    case TYA:
+        result = registers.Yregister;
+        registers.accumulator = registers.Yregister;
+        PPUcycles += 6;
+    break;
+    case CLC:
+    case CLD:
+    case CLI:
+    case CLV:
+    case NOP:
+    case SEC:
+    case SED:
+    case SEI:
+        PPUcycles+=6;
     }
+    UpdateProcessorStatus(result, signedResult, instruction);
 }
 
 void NES::Run()
@@ -519,6 +862,6 @@ void NES::Run()
         }
 
         Execute(instruction, addressMode);
-
+        //TODO generate interrupt when VBlank happens
     }
 }

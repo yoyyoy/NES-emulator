@@ -52,6 +52,17 @@ private:
         INDIRECT_X_INDEX, INDIRECT_Y_INDEX, RELATIVE, ZEROPAGE, ZEROPAGE_X_INDEX, ZEROPAGE_Y_INDEX, INVALID
     };
 
+    enum StatusFlags
+    {
+        CARRY=0,
+        ZERO=1,
+        INTERRUPT_DISABLE=2,
+        DECIMAL=3,
+        BREAK=4,
+        OVERFLOW=6,
+        NEGATIVE=7
+    };
+
     void ParseHeader(std::ifstream &romFile);
     void InitMemory(std::ifstream &romFile);
     void Execute(Instruction instruction, AddressMode addressMode);
@@ -64,8 +75,17 @@ private:
     uint16_t Read16Bit(uint16_t address, bool incrementPC);
     uint8_t Read8Bit(uint16_t address, bool incrementPC);
 
-    uint16_t GetOperandValue(AddressMode addressMode);
-    void UpdateProcessorStatus(uint16_t result, uint8_t flags);
+    void Write8Bit(uint16_t address, uint8_t value);
+
+    void PushStack16Bit(uint16_t value);
+    void PushStack8Bit(uint8_t value);
+
+    uint16_t PullStack16Bit();
+    uint8_t PullStack8Bit();
+
+    uint16_t GetOperandValue(AddressMode addressMode, uint16_t &address);
+    void UpdateProcessorStatus(uint16_t result, int32_t signedResult, Instruction instruction);
+    void SetProcessorStatusBit(int bitNum, bool set);
 
     char nesMemory[0x10000];
     vector<char[0x4000]> ROMbanks;
