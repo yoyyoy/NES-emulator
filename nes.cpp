@@ -66,13 +66,13 @@ void NES::InitMemory(ifstream &romFile)
     // TODO add support for mappers for ROMbanks size > 2
     if (ROMbanks.size() == 1)
     {
-        memcpy(nesMemory + 0x8000, ROMbanks[0], 0x4000);
-        memcpy(nesMemory + 0xC000, ROMbanks[0], 0x4000);
+        activeROMBank1=0;
+        activeROMBank2=0;
     }
     else if (ROMbanks.size() == 2)
     {
-        memcpy(nesMemory + 0x8000, ROMbanks[0], 0x4000);
-        memcpy(nesMemory + 0xC000, ROMbanks[1], 0x4000);
+        activeROMBank1 = 0;
+        activeROMBank2 = 1;
     }
     else
     {
@@ -862,6 +862,31 @@ void NES::Run()
         }
 
         Execute(instruction, addressMode);
-        //TODO generate interrupt when VBlank happens
+        if(PPUcycles > PPUcyclesPerLine)
+        {
+            PPUcycles -= PPUcyclesPerLine;
+            scanline++;
+        }
+
+        if (scanline == numTotalLines - numVBlankLines )
+        {
+            if ((nesMemory[0x2000] & 0b10000000))
+            {
+                PushStack16Bit(registers.programCounter);
+                PushStack8Bit(registers.processorStatus);
+                registers.programCounter = Read16Bit(0xFFFA, false);
+            }
+            
+            //set vblanking flag
+            nesMemory[0x2002] |=0b10000000;
+        }
+        else if(scanline>=numTotalLines)
+        {
+            scanline=0;
+
+            //clear vblanking flag
+            nesMemory[0x2002] &= 0b01111111;
+            //TODO draw frame here?
+        }
     }
 }

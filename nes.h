@@ -72,6 +72,7 @@ private:
     Instruction Low6E(uint8_t upper);
     void ParseOpcode(uint8_t opcode, Instruction &instruction, AddressMode &addressMode);
 
+    //TODO finish these
     uint16_t Read16Bit(uint16_t address, bool incrementPC);
     uint8_t Read8Bit(uint16_t address, bool incrementPC);
 
