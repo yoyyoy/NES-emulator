@@ -39,6 +39,30 @@ private:
         uint8_t processorStatus = 0;
     } registers;
 
+    struct PPUstatus
+    {
+        uint8_t currentNameTable;
+        bool incrementBy32;
+        bool spritePatternTable;
+        bool backgroundPatternTable;
+        bool is8x16Sprites;
+        bool doNMI;
+        bool monochromeMode;
+        bool showLeft8PixelsBackground;
+        bool showLeft8PixelsSprites;
+        bool displayBackground;
+        bool displaySprites;
+        uint8_t backgroundColorIntensity;
+        bool hitSprite0=false;
+        bool spriteOverflow=false;
+        bool VBlanking;
+        uint8_t OAMcurrentAddress;
+        uint8_t Xscroll;
+        uint8_t Yscroll;
+        uint16_t VRAMaddress;
+        bool firstRead=true;
+    } PPUstatus;
+
     enum Instruction
     {
         ADC, AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL, BRK, BVC, BVS, CLC, CLD, CLI, CLV, CMP, CPX, CPY,
@@ -72,7 +96,6 @@ private:
     Instruction Low6E(uint8_t upper);
     void ParseOpcode(uint8_t opcode, Instruction &instruction, AddressMode &addressMode);
 
-    //TODO finish these
     uint16_t Read16Bit(uint16_t address, bool incrementPC);
     uint8_t Read8Bit(uint16_t address, bool incrementPC);
 
@@ -88,7 +111,14 @@ private:
     void UpdateProcessorStatus(uint16_t result, int32_t signedResult, Instruction instruction);
     void SetProcessorStatusBit(int bitNum, bool set);
 
+    uint8_t PPUGet2002();
+    void PPUWrite(uint8_t value);
+    void PPURenderLine();
+    void PPUHandleRegisterWrite(uint8_t reg, uint8_t value);
+
     char nesMemory[0x10000];
+    char PPUmemory[0x4000];
+    char PPUOAM[256];
     vector<char[0x4000]> ROMbanks;
     vector<char[0x2000]> VROMbanks;
     int scanline=0;
@@ -97,6 +127,7 @@ private:
 
     int activeROMBank1;
     int activeROMBank2;
+    int activeVROMBank=0;
 
     //differ depending on NTSC or PAL
     int numVBlankLines;

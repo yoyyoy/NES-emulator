@@ -866,27 +866,27 @@ void NES::Run()
         {
             PPUcycles -= PPUcyclesPerLine;
             scanline++;
+            PPURenderLine();
         }
 
         if (scanline == numTotalLines - numVBlankLines )
         {
-            if ((nesMemory[0x2000] & 0b10000000))
+            if (PPUstatus.doNMI)
             {
                 PushStack16Bit(registers.programCounter);
                 PushStack8Bit(registers.processorStatus);
                 registers.programCounter = Read16Bit(0xFFFA, false);
             }
             
-            //set vblanking flag
-            nesMemory[0x2002] |=0b10000000;
+            PPUstatus.VBlanking=true;
         }
         else if(scanline>=numTotalLines)
         {
             scanline=0;
-
-            //clear vblanking flag
-            nesMemory[0x2002] &= 0b01111111;
-            //TODO draw frame here?
+            PPUstatus.VBlanking=false;
+            PPUstatus.hitSprite0=false;
+            PPUstatus.spriteOverflow=false;
+            //TODO show frame then sleep until we hit msPerFrame
         }
     }
 }
