@@ -1,7 +1,7 @@
 #include "nes.h"
 #include <chrono>
 #include <thread>
-
+#include <iomanip>
 using namespace std;
 
 void NES::ParseHeader(ifstream &romFile)
@@ -615,13 +615,13 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
         result = (registers.processorStatus & 1) + registers.accumulator + operandValue;
         signedResult = (int8_t)registers.accumulator + (int8_t)operandValue + (registers.processorStatus & 1);
         registers.accumulator=result;
-        cout << "A=" << (int)registers.accumulator << '\n';
+        //cout << "A=" << (int)registers.accumulator << '\n';
         PPUcycles+=6;
     break;
     case AND:
         registers.accumulator &= operandValue;
         result = registers.accumulator;
-        cout << "A=" << (int)registers.accumulator << '\n';
+        //cout << "A=" << (int)registers.accumulator << '\n';
         PPUcycles+=6;
     break;
     case ASL:
@@ -629,12 +629,12 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
         if(addressMode == ACCUMULATOR)
         {
             registers.accumulator=result;
-            cout << "A=" << (int)registers.accumulator << '\n';
+            //cout << "A=" << (int)registers.accumulator << '\n';
         }
         else
         {
             Write8Bit(address, result);
-            cout << std::hex << address << "=" <<result << '\n';
+            //cout << std::hex << address << "=" <<result << '\n';
         }
         PPUcycles+=6;
     break;
@@ -642,7 +642,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
         if(!(registers.processorStatus & 1))
         {
             registers.programCounter += (int8_t) operandValue;
-            cout << "PC=" << std::hex << registers.programCounter << "\n";
+            //cout << "PC=" << std::hex << registers.programCounter << "\n";
         }
         PPUcycles+=6;
     break;
@@ -650,7 +650,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
         if (registers.processorStatus & 1)
         {
             registers.programCounter += (int8_t)operandValue;
-            cout << "PC=" << std::hex << registers.programCounter << "\n";
+            //cout << "PC=" << std::hex << registers.programCounter << "\n";
         }
         PPUcycles += 6;
     break;
@@ -658,7 +658,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
         if (registers.processorStatus & 0b00000010)
         {
             registers.programCounter += (int8_t)operandValue;
-            cout << "PC=" << std::hex << registers.programCounter << "\n";
+            //cout << "PC=" << std::hex << registers.programCounter << "\n";
         }
         PPUcycles += 6;
     break;
@@ -670,7 +670,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
         if (registers.processorStatus & 0b10000000)
         {
             registers.programCounter += (int8_t)operandValue;
-            cout << "PC=" << std::hex << registers.programCounter << "\n";
+            //cout << "PC=" << std::hex << registers.programCounter << "\n";
         }
         PPUcycles += 6;
     break;
@@ -678,7 +678,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
         if (!(registers.processorStatus & 0b00000010))
         {
             registers.programCounter += (int8_t)operandValue;
-            cout << "PC=" << std::hex << registers.programCounter << "\n";
+            //cout << "PC=" << std::hex << registers.programCounter << "\n";
         }
         PPUcycles += 6;
     break;
@@ -686,7 +686,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
         if (!(registers.processorStatus & 0b10000000))
         {
             registers.programCounter += (int8_t)operandValue;
-            cout << "PC=" << std::hex << registers.programCounter << "\n";
+            //cout << "PC=" << std::hex << registers.programCounter << "\n";
         }
         PPUcycles += 6;
     break;
@@ -704,7 +704,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
         if (!(registers.processorStatus & 0b01000000))
         {
             registers.programCounter += (int8_t)operandValue;
-            cout << "PC=" << std::hex << registers.programCounter << "\n";
+            //cout << "PC=" << std::hex << registers.programCounter << "\n";
         }
         PPUcycles += 6;
     break;
@@ -712,90 +712,90 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
         if (registers.processorStatus & 0b01000000)
         {
             registers.programCounter += (int8_t)operandValue;
-            cout << "PC=" << std::hex << registers.programCounter << "\n";
+            //cout << "PC=" << std::hex << registers.programCounter << "\n";
         }
         PPUcycles += 6;
     break;
     case CMP:
         result = registers.accumulator - operandValue;
-        cout << "compare result=" << (int)result << "\n";
+        //cout << "compare result=" << (int)result << "\n";
         PPUcycles += 6;
     break;
     case CPX:
         result = registers.Xregister - operandValue;
-        cout << "compare result=" << result << "\n";
+        //cout << "compare result=" << result << "\n";
         PPUcycles += 6;
     break;
     case CPY:
         result = registers.Yregister - operandValue;
-        cout << "compare result=" << result << "\n";
+        //cout << "compare result=" << result << "\n";
         PPUcycles += 6;
     break;
     case DEC:
         result = (operandValue-1);
         Write8Bit(address, result);
-        cout << std::hex << address << "=" << result << '\n';
+        //cout << std::hex << address << "=" << result << '\n';
         PPUcycles+=15;
     break;
     case DEX:
         result = --registers.Xregister;
-        cout << "X=" << (int)registers.Xregister << '\n';
+        //cout << "X=" << (int)registers.Xregister << '\n';
         PPUcycles+=6;
     break;
     case DEY:
         result = --registers.Yregister;
-        cout << "Y=" << (int)registers.Yregister << '\n';
+        //cout << "Y=" << (int)registers.Yregister << '\n';
         PPUcycles+=6;
     break;
     case EOR:
         registers.accumulator ^= operandValue;
         result = registers.accumulator;
-        cout << "A=" << (int)registers.accumulator << '\n';
+        //cout << "A=" << (int)registers.accumulator << '\n';
         PPUcycles+=6;
     break;
     case INC:
         result = (operandValue + 1);
         Write8Bit(address, result);
-        cout << std::hex << address << "=" << result << '\n';
+        //cout << std::hex << address << "=" << result << '\n';
         PPUcycles += 15;
         break;
     case INX:
         result = ++registers.Xregister;
-        cout << "X=" << (int)registers.Xregister << '\n';
+        //cout << "X=" << (int)registers.Xregister << '\n';
         PPUcycles += 6;
         break;
     case INY:
         result = ++registers.Yregister;
-        cout << "Y=" << (int)registers.Yregister << '\n';
+        //cout << "Y=" << (int)registers.Yregister << '\n';
         PPUcycles += 6;
         break;
     case JMP:
         registers.programCounter = operandValue;
-        cout << "PC=" << std::hex << registers.programCounter << "\n";
+        //cout << "PC=" << std::hex << registers.programCounter << "\n";
         PPUcycles+=9;
     break;
     case JSR:
         PushStack16Bit(registers.programCounter);
         registers.programCounter = operandValue;
-        cout << "PC=" << std::hex << registers.programCounter << "\n";
+        //cout << "PC=" << std::hex << registers.programCounter << "\n";
         PPUcycles +=18;
     break;
     case LDA:
         result = operandValue;
         registers.accumulator = operandValue;
-        cout << "A=" << (int)registers.accumulator << '\n';
+        //cout << "A=" << (int)registers.accumulator << '\n';
         PPUcycles+=6;
     break;
     case LDX:
         result = operandValue;
         registers.Xregister = operandValue;
-        cout << "X=" << (int)registers.Xregister << '\n';
+        //cout << "X=" << (int)registers.Xregister << '\n';
         PPUcycles += 6;
         break;
     case LDY:
         result = operandValue;
         registers.Yregister = operandValue;
-        cout << "Y=" << (int)registers.Yregister << '\n';
+        //cout << "Y=" << (int)registers.Yregister << '\n';
         PPUcycles += 6;
         break;
     case LSR: 
@@ -812,7 +812,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
     case ORA:
         registers.accumulator |= operandValue;
         result = registers.accumulator;
-        cout << "A=" << (int)registers.accumulator << '\n';
+        //cout << "A=" << (int)registers.accumulator << '\n';
         PPUcycles += 6;
         break;
     case PHA:
@@ -826,7 +826,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
     case PLA:
         registers.accumulator = PullStack8Bit();
         result = registers.accumulator;
-        cout << "A=" << (int)registers.accumulator << '\n';
+        //cout << "A=" << (int)registers.accumulator << '\n';
         PPUcycles+=12;
     break;
     case PLP:
@@ -873,7 +873,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
         SetProcessorStatusBit(OVERFLOW, signedResult > 127 || signedResult < -128);
         SetProcessorStatusBit(NEGATIVE, registers.accumulator & 0b10000000);
         PPUcycles += 6;
-        cout << "A=" << (int)registers.accumulator << '\n';
+        //cout << "A=" << (int)registers.accumulator << '\n';
         break;
     case STA:
         Write8Bit(address, registers.accumulator);
@@ -938,7 +938,7 @@ void NES::Run()
         Instruction instruction=Instruction::INVALID_INSTRUCTION;
         AddressMode addressMode=AddressMode::INVALID_ADDRESS_MODE;
         ParseOpcode(opcode, instruction, addressMode);
-        cout << debugInstructionToString[instruction] << " " << debugAddressModeToString[addressMode] << '\n';
+        //cout << debugInstructionToString[instruction] << " " << debugAddressModeToString[addressMode] << '\n';
         if(instruction==Instruction::INVALID_INSTRUCTION || addressMode == AddressMode::INVALID_ADDRESS_MODE)
         {
             cerr << "Invalid opcode " << std::hex << (int)opcode <<"\n";
@@ -949,7 +949,8 @@ void NES::Run()
         if(PPUcycles > PPUcyclesPerLine)
         {
             PPUcycles -= PPUcyclesPerLine;
-            PPURenderLine();
+            if(scanline < numTotalLines - numVBlankLines)
+                PPURenderLine();
             scanline++;
             if (scanline == numTotalLines - numVBlankLines)
             {
@@ -971,9 +972,26 @@ void NES::Run()
                 // TODO show frame then sleep until we hit msPerFrame
                 SDL_BlitScaled(nesSurface, NULL, windowSurface, &stretchRect);
                 SDL_UpdateWindowSurface(win);
+                
+                
                 frameCount++;
-                if(frameCount>10)
+                std::cout << "\n";
+                std::cout << "\n";
+
+                std::cout << "\n";
+                if(frameCount>3)
+                {
+                    for(int i=0; i<30; i++)
+                    {
+                        for(int j=0; j<32;j++)
+                        {
+                            //cout << setfill('0') << setw(2) << std::hex << ((int)PPUmemory[0x2000 + j + i * 32] & 0xFF) << " ";
+                        }
+                        //cout << "\n";
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
                     exit(0);
+                }
                 //std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             }
         }

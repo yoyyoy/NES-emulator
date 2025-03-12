@@ -1,4 +1,5 @@
 #include "nes.h"
+#include <iomanip>
 
 uint8_t NES::PPUGet2002()
 {
@@ -22,8 +23,8 @@ void NES::PPUWrite(uint8_t value)
 
 void NES::PPURenderLine()
 {
-    Uint32* scanlinePixels =(Uint32*) ((Uint8*)nesSurface->pixels + nesSurface->pitch * (scanline- header.isPAL ? 0 : 8));
-
+    Uint32* scanlinePixels =(Uint32*)nesSurface->pixels;
+    scanlinePixels += (scanline - (header.isPAL ? 0 : 8)) * 256;
     UpdateSprites();
 
     uint16_t nameTableAddress;
@@ -48,17 +49,12 @@ void NES::PPURenderLine()
 
             uint8_t nesColor = GetColor(nametable, nametableX, nametableY, paletteIndex);
             RGB color = nesPalette[nesColor];
-            ((Uint8 *)(scanlinePixels + i))[0] = color.r;
-            ((Uint8 *)(scanlinePixels + i))[1] = color.g;
-            ((Uint8 *)(scanlinePixels + i))[2] = color.b;
-            ((Uint8 *)(scanlinePixels + i))[3] = 255;
+            scanlinePixels[i]=*((Uint32*) &color);
         }
         else
         {
-            ((Uint8 *)(scanlinePixels + i))[0] = nesPalette[PPUmemory[0x3F00]].r;
-            ((Uint8 *)(scanlinePixels + i))[1] = nesPalette[PPUmemory[0x3F00]].g;
-            ((Uint8 *)(scanlinePixels + i))[2] = nesPalette[PPUmemory[0x3F00]].b;
-            ((Uint8 *)(scanlinePixels + i))[3] = 255;
+            RGB color = nesPalette[PPUmemory[0x3F00]];
+            scanlinePixels[i] = *((Uint32 *)&color);
         }
 
         //draw sprites
@@ -66,6 +62,14 @@ void NES::PPURenderLine()
         {
 
         }
+    }
+    for(int i=0; i<224; i++)
+    {
+        for(int j=0; j<256; j++)
+        {
+            //std::cout << std::setfill('0') << std::setw(8) << std::hex << ((Uint32*)nesSurface->pixels)[i*256+j] << " ";
+        }
+        //std::cout << "\n";
     }
 }
 
@@ -108,6 +112,15 @@ uint8_t NES::PPUGetNameTableByte(int nametable, int x, int y)
     }
     uint16_t desired = (nametable << 10) + x + (y*32);
     desired += 0x2000;
+    for (int i = 0; i < 30; i++)
+    {
+        for (int j = 0; j < 32; j++)
+        {
+            //std::cout << std::setfill('0') << std::setw(2) << std::hex << ((int)PPUmemory[0x2000 + j + i * 32] & 0xFF) << " ";
+        }
+        //std::cout << "\n";
+    }
+    //std::cout << std::setfill('0') << std::setw(2) << std::hex << ((int)PPUmemory[desired] & 0xFF) << "\n\n";
     return PPUmemory[desired];
 }
 

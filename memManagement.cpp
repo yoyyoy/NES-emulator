@@ -89,11 +89,11 @@ void NES::PushStack8Bit(uint8_t value)
 
     for (int i = 0; i < 256; i++)
     {
-        if(i==registers.stackPointer)
-            std::cout << "|";
-        std::cout << std::hex << (((int)nesMemory[0x100 + i]) & 0xFF) << " ";
+        //if(i==registers.stackPointer)
+        //    std::cout << "|";
+        //std::cout << std::hex << (((int)nesMemory[0x100 + i]) & 0xFF) << " ";
     }
-    std::cout << '\n';
+    //std::cout << '\n';
 }
 
 uint16_t NES::PullStack16Bit()
@@ -109,10 +109,10 @@ uint8_t NES::PullStack8Bit()
     
     for (int i = 0; i < 256; i++)
     {
-        if (i == registers.stackPointer)
-            std::cout << "|";
-        std::cout << std::hex << (((int)nesMemory[0x100 + i]) & 0xFF) << " ";
+        //if (i == registers.stackPointer)
+        //    std::cout << "|";
+        //std::cout << std::hex << (((int)nesMemory[0x100 + i]) & 0xFF) << " ";
     }
-    std::cout << '\n';
+    //std::cout << '\n';
     return nesMemory[registers.stackPointer + 0x100];
 }
