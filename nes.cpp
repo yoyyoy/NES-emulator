@@ -97,6 +97,7 @@ void NES::InitMemory(ifstream &romFile)
         numVBlankLines=30;
         numTotalLines=262;
         msPerFrame=16.66666;
+        scanline=8;
     }
     registers.programCounter = Read16Bit(0xFFFC, false);
 }
@@ -111,7 +112,7 @@ void NES::InitSDL()
     }
 
     windowSurface = SDL_GetWindowSurface(win);
-    nesSurface = SDL_CreateRGBSurface(0, 256, header.isPAL ? 240 : 224, 32, 0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF);
+    nesSurface = SDL_CreateRGBSurface(0, 256, header.isPAL ? 240 : 224, 32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
 
     if (!nesSurface)
     {
@@ -951,6 +952,7 @@ void NES::Run()
             PPUcycles -= PPUcyclesPerLine;
             if(scanline < numTotalLines - numVBlankLines)
                 PPURenderLine();
+            
             scanline++;
             if (scanline == numTotalLines - numVBlankLines)
             {
@@ -973,8 +975,8 @@ void NES::Run()
                 SDL_BlitScaled(nesSurface, NULL, windowSurface, &stretchRect);
                 SDL_UpdateWindowSurface(win);
                 
-                
-                frameCount++;
+                cout << ++frameCount << '\n';
+                /*frameCount++;
                 std::cout << "\n";
                 std::cout << "\n";
 
@@ -989,10 +991,11 @@ void NES::Run()
                         }
                         //cout << "\n";
                     }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50000));
                     exit(0);
                 }
                 //std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                */
             }
         }
 

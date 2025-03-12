@@ -38,8 +38,8 @@ void NES::PPURenderLine()
             uint8_t patternIndex = PPUGetNameTableByte(nametable, nametableX, nametableY);
             uint8_t yOffset = (scanline+ PPUstatus.Yscroll) % 8;
             uint8_t xOffset = 7 - ((i + PPUstatus.Xscroll) % 8);
-            uint8_t firstByte = VROMbanks[activeVROMBank].at(patternIndex*16 + yOffset);
-            uint8_t secondByte = VROMbanks[activeVROMBank].at(patternIndex*16 + yOffset + 8);
+            uint8_t firstByte = VROMbanks[activeVROMBank].at(patternIndex*16 + yOffset + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
+            uint8_t secondByte = VROMbanks[activeVROMBank].at(patternIndex * 16 + yOffset + 8 + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
             uint8_t paletteIndex=0;
             if(firstByte & (1 << xOffset))
                 paletteIndex+=1;
@@ -126,7 +126,7 @@ uint8_t NES::PPUGetNameTableByte(int nametable, int x, int y)
 
 uint8_t NES::GetColor(uint8_t nametable, uint8_t x, uint8_t y, uint8_t paletteIndex)
 {
-    uint16_t attributeAddress = 0x23C0 + (nametable << 10) + (x/4) + (y/4);
+    uint16_t attributeAddress = 0x23C0 + (nametable << 10) + (x/4) + ((y/4)*8);
     uint8_t attributeByte = PPUmemory[attributeAddress];
     uint8_t mask = 0b11;
     uint8_t maskShift=0;

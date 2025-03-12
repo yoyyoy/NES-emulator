@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/debug/program",
             "args": [
-                "-p=/home/yoy/Downloads/Super Mario Bros. (Japan, USA).nes"
+                "-p=/home/yoy/Downloads/Donkey Kong (USA) (GameCube Edition).nes"
             ],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "Build Debug" // Links to the debug build task
@@ -20,7 +20,9 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/release/program",
-            "args": [],
+            "args": [
+                "-p=/home/yoy/Downloads/Donkey Kong (USA) (GameCube Edition).nes"
+        ],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "Build Release" // Links to the debug build task
         }
