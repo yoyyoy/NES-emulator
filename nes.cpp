@@ -1,4 +1,6 @@
 #include "nes.h"
+#include <chrono>
+#include <thread>
 
 using namespace std;
 
@@ -7,7 +9,7 @@ void NES::ParseHeader(ifstream &romFile)
     char magicBytes[4];
     romFile.read(magicBytes, 4);
 
-    if (!(magicBytes[0] == 0x4E && magicBytes[0] == 0x45 && magicBytes[0] == 0x53 && magicBytes[0] == 0x1A))
+    if (!(magicBytes[0] == 0x4E && magicBytes[1] == 0x45 && magicBytes[2] == 0x53 && magicBytes[3] == 0x1A))
     {
         cerr << "Invalid header\n";
         exit(3);
@@ -38,6 +40,10 @@ void NES::ParseHeader(ifstream &romFile)
 
     char unusedData[6];
     romFile.read(unusedData, 6);
+
+    //it's possible for nametable mirroring to change on the fly, so only use the header value to initialize PPUstatus
+    //then change it as needed. do not use header.isHorizontalArrangement or header.is4ScreenVRAM
+    PPUstatus.nameTableMirror = header.is4ScreenVRAM ? FOUR_SCREEN : header.isHorizontalArrangement ? VERTICAL : HORIZONTAL;
 }
 
 void NES::InitMemory(ifstream &romFile)
@@ -48,13 +54,13 @@ void NES::InitMemory(ifstream &romFile)
     for (int i = 0; i < header.PRGROMsize; i++)
     {
         ROMbanks.emplace_back();
-        romFile.read(ROMbanks.back(), 0x4000);
+        romFile.read(ROMbanks.back().data(), 0x4000);
     }
 
     for (int i = 0; i < header.CHRROMsize; i++)
     {
         VROMbanks.emplace_back();
-        romFile.read(VROMbanks.back(), 0x2000);
+        romFile.read(VROMbanks.back().data(), 0x2000);
     }
 
     if (romFile.fail())
@@ -82,17 +88,41 @@ void NES::InitMemory(ifstream &romFile)
 
     if(header.isPAL)
     {
-        numVBlankLines=70;
+        numVBlankLines=72;
         numTotalLines=312;
         msPerFrame=20;
     }
     else
     {
-        numVBlankLines=20;
+        numVBlankLines=30;
         numTotalLines=262;
         msPerFrame=16.66666;
     }
-    registers.programCounter = *(uint16_t *)(&nesMemory[0xFFFC]);
+    registers.programCounter = Read16Bit(0xFFFC, false);
+}
+
+void NES::InitSDL()
+{
+    win = SDL_CreateWindow("NES Emulator", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 256 * 4, header.isPAL ? 240 * 4 : 224 * 4, SDL_WINDOW_SHOWN);
+    if (!win)
+    {
+        std::cerr << "failed to create SDL window: " << SDL_GetError() << "\n";
+        exit(9);
+    }
+
+    windowSurface = SDL_GetWindowSurface(win);
+    nesSurface = SDL_CreateRGBSurface(0, 256, header.isPAL ? 240 : 224, 32, 0xFF000000, 0x00FF0000, 0x0000FF00, 0x000000FF);
+
+    if (!nesSurface)
+    {
+        std::cerr << "failed to create SDL surface: " << SDL_GetError() << "\n";
+        exit(10);
+    }
+
+    stretchRect.x=0;
+    stretchRect.y=0;
+    stretchRect.w=256*4;
+    stretchRect.h = (header.isPAL ? 240 : 224)*4;
 }
 
 NES::Instruction NES::Low159D(uint8_t upper)
@@ -108,6 +138,7 @@ NES::Instruction NES::Low159D(uint8_t upper)
     case 6: return Instruction::CMP;
     case 7: return Instruction::SBC;
     }
+    return INVALID_INSTRUCTION;
 }
 
 NES::Instruction NES::Low6E(uint8_t upper)
@@ -123,6 +154,7 @@ NES::Instruction NES::Low6E(uint8_t upper)
     case 6: return Instruction::DEC;
     case 7: return Instruction::INC;
     }
+    return INVALID_INSTRUCTION;
 }
 
 void NES::ParseOpcode(uint8_t opcode, Instruction& instruction, AddressMode& addressMode)
@@ -440,14 +472,13 @@ void NES::ParseOpcode(uint8_t opcode, Instruction& instruction, AddressMode& add
         break;
 
     default:
-        cerr << "Invalid lower nybble of opcode\n";
+        cerr << "Invalid lower nybble of opcode " << std::hex << opcode << "\n";
         exit(6);
     }
 }
 
 uint16_t NES::GetOperandValue(AddressMode addressMode, uint16_t &address)
 {
-    uint16_t address;
     switch(addressMode)
     {
     case ACCUMULATOR: return registers.accumulator;
@@ -485,6 +516,7 @@ uint16_t NES::GetOperandValue(AddressMode addressMode, uint16_t &address)
         address = (Read8Bit(registers.programCounter, true) + registers.Yregister) % 256;
         return Read8Bit(address, false);
     }
+    return -1;
 }
 
 void NES::SetProcessorStatusBit(int bitNum, bool set)
@@ -576,40 +608,58 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
     uint16_t operandValue = GetOperandValue(addressMode, address);
     uint32_t result;
     int32_t signedResult;
+    
     switch(instruction)
     {//TODO potential improvement. add to PPUcycles more accurately, taking into account address mode and whatever
     case ADC:
         result = (registers.processorStatus & 1) + registers.accumulator + operandValue;
         signedResult = (int8_t)registers.accumulator + (int8_t)operandValue + (registers.processorStatus & 1);
         registers.accumulator=result;
+        cout << "A=" << (int)registers.accumulator << '\n';
         PPUcycles+=6;
     break;
     case AND:
         registers.accumulator &= operandValue;
         result = registers.accumulator;
+        cout << "A=" << (int)registers.accumulator << '\n';
         PPUcycles+=6;
     break;
     case ASL:
         result = operandValue << 1;
         if(addressMode == ACCUMULATOR)
+        {
             registers.accumulator=result;
+            cout << "A=" << (int)registers.accumulator << '\n';
+        }
         else
+        {
             Write8Bit(address, result);
+            cout << std::hex << address << "=" <<result << '\n';
+        }
         PPUcycles+=6;
     break;
     case BCC:
         if(!(registers.processorStatus & 1))
+        {
             registers.programCounter += (int8_t) operandValue;
+            cout << "PC=" << std::hex << registers.programCounter << "\n";
+        }
         PPUcycles+=6;
     break;
     case BCS:
         if (registers.processorStatus & 1)
+        {
             registers.programCounter += (int8_t)operandValue;
+            cout << "PC=" << std::hex << registers.programCounter << "\n";
+        }
         PPUcycles += 6;
     break;
     case BEQ:
         if (registers.processorStatus & 0b00000010)
+        {
             registers.programCounter += (int8_t)operandValue;
+            cout << "PC=" << std::hex << registers.programCounter << "\n";
+        }
         PPUcycles += 6;
     break;
     case BIT:
@@ -618,17 +668,26 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
     break;
     case BMI:
         if (registers.processorStatus & 0b10000000)
+        {
             registers.programCounter += (int8_t)operandValue;
+            cout << "PC=" << std::hex << registers.programCounter << "\n";
+        }
         PPUcycles += 6;
     break;
     case BNE:
         if (!(registers.processorStatus & 0b00000010))
+        {
             registers.programCounter += (int8_t)operandValue;
+            cout << "PC=" << std::hex << registers.programCounter << "\n";
+        }
         PPUcycles += 6;
     break;
     case BPL:
         if (!(registers.processorStatus & 0b10000000))
+        {
             registers.programCounter += (int8_t)operandValue;
+            cout << "PC=" << std::hex << registers.programCounter << "\n";
+        }
         PPUcycles += 6;
     break;
     case BRK:
@@ -643,79 +702,100 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
     break;
     case BVC:
         if (!(registers.processorStatus & 0b01000000))
+        {
             registers.programCounter += (int8_t)operandValue;
+            cout << "PC=" << std::hex << registers.programCounter << "\n";
+        }
         PPUcycles += 6;
     break;
     case BVS:
         if (registers.processorStatus & 0b01000000)
+        {
             registers.programCounter += (int8_t)operandValue;
+            cout << "PC=" << std::hex << registers.programCounter << "\n";
+        }
         PPUcycles += 6;
     break;
     case CMP:
         result = registers.accumulator - operandValue;
+        cout << "compare result=" << (int)result << "\n";
         PPUcycles += 6;
     break;
     case CPX:
         result = registers.Xregister - operandValue;
+        cout << "compare result=" << result << "\n";
         PPUcycles += 6;
     break;
     case CPY:
         result = registers.Yregister - operandValue;
+        cout << "compare result=" << result << "\n";
         PPUcycles += 6;
     break;
     case DEC:
         result = (operandValue-1);
         Write8Bit(address, result);
+        cout << std::hex << address << "=" << result << '\n';
         PPUcycles+=15;
     break;
     case DEX:
         result = --registers.Xregister;
+        cout << "X=" << (int)registers.Xregister << '\n';
         PPUcycles+=6;
     break;
     case DEY:
         result = --registers.Yregister;
+        cout << "Y=" << (int)registers.Yregister << '\n';
         PPUcycles+=6;
     break;
     case EOR:
         registers.accumulator ^= operandValue;
         result = registers.accumulator;
+        cout << "A=" << (int)registers.accumulator << '\n';
         PPUcycles+=6;
     break;
     case INC:
         result = (operandValue + 1);
         Write8Bit(address, result);
+        cout << std::hex << address << "=" << result << '\n';
         PPUcycles += 15;
         break;
     case INX:
         result = ++registers.Xregister;
+        cout << "X=" << (int)registers.Xregister << '\n';
         PPUcycles += 6;
         break;
     case INY:
         result = ++registers.Yregister;
+        cout << "Y=" << (int)registers.Yregister << '\n';
         PPUcycles += 6;
         break;
     case JMP:
         registers.programCounter = operandValue;
+        cout << "PC=" << std::hex << registers.programCounter << "\n";
         PPUcycles+=9;
     break;
     case JSR:
         PushStack16Bit(registers.programCounter);
         registers.programCounter = operandValue;
+        cout << "PC=" << std::hex << registers.programCounter << "\n";
         PPUcycles +=18;
     break;
     case LDA:
         result = operandValue;
         registers.accumulator = operandValue;
+        cout << "A=" << (int)registers.accumulator << '\n';
         PPUcycles+=6;
     break;
     case LDX:
         result = operandValue;
         registers.Xregister = operandValue;
+        cout << "X=" << (int)registers.Xregister << '\n';
         PPUcycles += 6;
         break;
     case LDY:
         result = operandValue;
         registers.Yregister = operandValue;
+        cout << "Y=" << (int)registers.Yregister << '\n';
         PPUcycles += 6;
         break;
     case LSR: 
@@ -732,6 +812,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
     case ORA:
         registers.accumulator |= operandValue;
         result = registers.accumulator;
+        cout << "A=" << (int)registers.accumulator << '\n';
         PPUcycles += 6;
         break;
     case PHA:
@@ -745,6 +826,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
     case PLA:
         registers.accumulator = PullStack8Bit();
         result = registers.accumulator;
+        cout << "A=" << (int)registers.accumulator << '\n';
         PPUcycles+=12;
     break;
     case PLP:
@@ -791,6 +873,7 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
         SetProcessorStatusBit(OVERFLOW, signedResult > 127 || signedResult < -128);
         SetProcessorStatusBit(NEGATIVE, registers.accumulator & 0b10000000);
         PPUcycles += 6;
+        cout << "A=" << (int)registers.accumulator << '\n';
         break;
     case STA:
         Write8Bit(address, registers.accumulator);
@@ -848,16 +931,17 @@ void NES::Execute(Instruction instruction, AddressMode addressMode)
 
 void NES::Run()
 {
+    int frameCount=0;
     while(true)
     {
         uint8_t opcode = Read8Bit(registers.programCounter, true);
-        Instruction instruction=Instruction::INVALID;
-        AddressMode addressMode=AddressMode::INVALID;
+        Instruction instruction=Instruction::INVALID_INSTRUCTION;
+        AddressMode addressMode=AddressMode::INVALID_ADDRESS_MODE;
         ParseOpcode(opcode, instruction, addressMode);
-
-        if(instruction==Instruction::INVALID || addressMode == AddressMode::INVALID)
+        cout << debugInstructionToString[instruction] << " " << debugAddressModeToString[addressMode] << '\n';
+        if(instruction==Instruction::INVALID_INSTRUCTION || addressMode == AddressMode::INVALID_ADDRESS_MODE)
         {
-            cerr << "Invalid opcode " << (int)opcode <<"\n";
+            cerr << "Invalid opcode " << std::hex << (int)opcode <<"\n";
             exit(7);
         }
 
@@ -865,28 +949,36 @@ void NES::Run()
         if(PPUcycles > PPUcyclesPerLine)
         {
             PPUcycles -= PPUcyclesPerLine;
-            scanline++;
             PPURenderLine();
+            scanline++;
+            if (scanline == numTotalLines - numVBlankLines)
+            {
+                if (PPUstatus.doNMI)
+                {
+                    PushStack16Bit(registers.programCounter);
+                    PushStack8Bit(registers.processorStatus);
+                    registers.programCounter = Read16Bit(0xFFFA, false);
+                }
+
+                PPUstatus.VBlanking = true;
+            }
+            else if (scanline >= numTotalLines)
+            {
+                scanline = header.isPAL ? 0 : 8;
+                PPUstatus.VBlanking = false;
+                PPUstatus.hitSprite0 = false;
+                PPUstatus.spriteOverflow = false;
+                // TODO show frame then sleep until we hit msPerFrame
+                SDL_BlitScaled(nesSurface, NULL, windowSurface, &stretchRect);
+                SDL_UpdateWindowSurface(win);
+                frameCount++;
+                if(frameCount>10)
+                    exit(0);
+                //std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            }
         }
 
-        if (scanline == numTotalLines - numVBlankLines )
-        {
-            if (PPUstatus.doNMI)
-            {
-                PushStack16Bit(registers.programCounter);
-                PushStack8Bit(registers.processorStatus);
-                registers.programCounter = Read16Bit(0xFFFA, false);
-            }
-            
-            PPUstatus.VBlanking=true;
-        }
-        else if(scanline>=numTotalLines)
-        {
-            scanline=0;
-            PPUstatus.VBlanking=false;
-            PPUstatus.hitSprite0=false;
-            PPUstatus.spriteOverflow=false;
-            //TODO show frame then sleep until we hit msPerFrame
-        }
+
     }
+    SDL_DestroyWindow(win);
 }

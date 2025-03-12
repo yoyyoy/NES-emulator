@@ -9,7 +9,9 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/debug/program",
-            "args": [],
+            "args": [
+                "-p=/home/yoy/Downloads/Donkey Kong (USA) (GameCube Edition).nes"
+            ],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "Build Debug" // Links to the debug build task
         },

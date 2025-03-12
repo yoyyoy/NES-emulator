@@ -48,20 +48,24 @@ void NES::Write8Bit(uint16_t address, uint8_t value)
 {
     if(address < 0x2000) 
         nesMemory[address%0x0800] = value;
-    else if(address < 0x4000)
+    else if(address < 0x4000 || address == 0x4014)
     {
-        //TODO handle PPU stuff
+        
         address%=8;
         nesMemory[address+0x2000]=value;
         PPUHandleRegisterWrite(address, value);
+    }
+    else if(address== 0x4014)
+    {
+        nesMemory[address] = value;
+        PPUHandleRegisterWrite(address-0x4000, value);
     }
     else if(address < 0x4020)
     {
         address-=0x4000;
         switch(address)
         {//TODO audio registers and controller input registers
-        case 14:
-            PPUHandleRegisterWrite(address, value);
+
         }
 
     }
@@ -73,25 +77,42 @@ void NES::Write8Bit(uint16_t address, uint8_t value)
 
 void NES::PushStack16Bit(uint16_t value)
 {
-    PushStack8Bit(value);
+    value--;
     PushStack8Bit(value >> 8);
+    PushStack8Bit(value);
 }
 
 void NES::PushStack8Bit(uint8_t value)
 {
     nesMemory[registers.stackPointer + 0x100] = value;
     registers.stackPointer--;
+
+    for (int i = 0; i < 256; i++)
+    {
+        if(i==registers.stackPointer)
+            std::cout << "|";
+        std::cout << std::hex << (((int)nesMemory[0x100 + i]) & 0xFF) << " ";
+    }
+    std::cout << '\n';
 }
 
 uint16_t NES::PullStack16Bit()
 {
-    uint8_t highByte = PullStack8Bit();
     uint8_t lowByte = PullStack8Bit();
-    return ((uint16_t)highByte << 8) | lowByte;
+    uint8_t highByte = PullStack8Bit();
+    return (((uint16_t)highByte << 8) | lowByte)+1;
 }
 
 uint8_t NES::PullStack8Bit()
 {
     registers.stackPointer++;
+    
+    for (int i = 0; i < 256; i++)
+    {
+        if (i == registers.stackPointer)
+            std::cout << "|";
+        std::cout << std::hex << (((int)nesMemory[0x100 + i]) & 0xFF) << " ";
+    }
+    std::cout << '\n';
     return nesMemory[registers.stackPointer + 0x100];
 }

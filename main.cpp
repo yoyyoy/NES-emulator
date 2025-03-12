@@ -4,6 +4,8 @@ using namespace std;
 
 int main(int argc, char* argv[])
 {
+    SDL_Init(SDL_INIT_EVERYTHING);
+
     string romPath="";
     for(int i=0; i<argc; i++)
     {
@@ -28,6 +30,9 @@ int main(int argc, char* argv[])
         return 2;
     }
     
+    
+
     NES nes(romFile);
     nes.Run();
+    SDL_Quit();
 }

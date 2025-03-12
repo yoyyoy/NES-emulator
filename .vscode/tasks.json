@@ -7,9 +7,10 @@
             "args": [
                 "-fdiagnostics-color=always",
                 "-g",
-                "${workspaceFolder}/main.cpp",
+                "${workspaceFolder}/*.cpp",
                 "-o",
-                "${workspaceFolder}/debug/program"
+                "${workspaceFolder}/debug/program",
+                "-lSDL2"
             ],
             "options": {
                 "cwd": "${fileDirname}"
@@ -30,9 +31,10 @@
             "args": [
                 "-fdiagnostics-color=always",
                 "-O3",
-                "${workspaceFolder}/main.cpp",
+                "${workspaceFolder}/*.cpp",
                 "-o",
-                "${workspaceFolder}/release/program"
+                "${workspaceFolder}/release/program",
+                "-lSDL2"
             ],
             "options": {
                 "cwd": "${fileDirname}"
