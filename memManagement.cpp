@@ -77,7 +77,6 @@ void NES::Write8Bit(uint16_t address, uint8_t value)
 
 void NES::PushStack16Bit(uint16_t value)
 {
-    value--;
     PushStack8Bit(value >> 8);
     PushStack8Bit(value);
 }
@@ -100,7 +99,7 @@ uint16_t NES::PullStack16Bit()
 {
     uint8_t lowByte = PullStack8Bit();
     uint8_t highByte = PullStack8Bit();
-    return (((uint16_t)highByte << 8) | lowByte)+1;
+    return (((uint16_t)highByte << 8) | lowByte);
 }
 
 uint8_t NES::PullStack8Bit()

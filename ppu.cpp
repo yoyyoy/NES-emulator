@@ -14,6 +14,7 @@ uint8_t NES::PPUGet2002()
 
 void NES::PPUWrite(uint8_t value)
 {//TODO write only to real addresses and not mirrors
+    //std::cout << "attempted to write 0x" << std::hex << (uint32_t)value << " to 0x" << PPUstatus.VRAMaddress << "\n"; 
     PPUmemory[PPUstatus.VRAMaddress % 0x4000] = value;
     if(PPUstatus.incrementBy32)
         PPUstatus.VRAMaddress += 32;
@@ -63,14 +64,6 @@ void NES::PPURenderLine()
 
         }
     }
-    for(int i=0; i<224; i++)
-    {
-        for(int j=0; j<256; j++)
-        {
-            //std::cout << std::setfill('0') << std::setw(8) << std::hex << ((Uint32*)nesSurface->pixels)[i*256+j] << " ";
-        }
-        //std::cout << "\n";
-    }
 }
 
 void NES::CalcNameTableCoords(uint8_t &nameTable, uint8_t &x, uint8_t &y, uint8_t currentPixel)
@@ -112,15 +105,6 @@ uint8_t NES::PPUGetNameTableByte(int nametable, int x, int y)
     }
     uint16_t desired = (nametable << 10) + x + (y*32);
     desired += 0x2000;
-    for (int i = 0; i < 30; i++)
-    {
-        for (int j = 0; j < 32; j++)
-        {
-            //std::cout << std::setfill('0') << std::setw(2) << std::hex << ((int)PPUmemory[0x2000 + j + i * 32] & 0xFF) << " ";
-        }
-        //std::cout << "\n";
-    }
-    //std::cout << std::setfill('0') << std::setw(2) << std::hex << ((int)PPUmemory[desired] & 0xFF) << "\n\n";
     return PPUmemory[desired];
 }
 

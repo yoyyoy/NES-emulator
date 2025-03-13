@@ -126,401 +126,51 @@ void NES::InitSDL()
     stretchRect.h = (header.isPAL ? 240 : 224)*4;
 }
 
-NES::Instruction NES::Low159D(uint8_t upper)
+std::pair<uint16_t, uint16_t> NES::GetOperandValue(AddressMode addressMode)
 {
-    switch (upper >> 1)
-    {
-    case 0: return Instruction::ORA;
-    case 1: return Instruction::AND;
-    case 2: return Instruction::EOR;
-    case 3: return Instruction::ADC;
-    case 4: return Instruction::STA;
-    case 5: return Instruction::LDA;
-    case 6: return Instruction::CMP;
-    case 7: return Instruction::SBC;
-    }
-    return INVALID_INSTRUCTION;
-}
-
-NES::Instruction NES::Low6E(uint8_t upper)
-{
-    switch (upper >> 1)
-    {
-    case 0: return Instruction::ASL;
-    case 1: return Instruction::ROL;
-    case 2: return Instruction::LSR;
-    case 3: return Instruction::ROR;
-    case 4: return Instruction::STX;
-    case 5: return Instruction::LDX;
-    case 6: return Instruction::DEC;
-    case 7: return Instruction::INC;
-    }
-    return INVALID_INSTRUCTION;
-}
-
-void NES::ParseOpcode(uint8_t opcode, Instruction& instruction, AddressMode& addressMode)
-{
-    uint8_t upper = (opcode >> 4) & 0xF;
-    uint8_t lower = opcode & 0xF;
-    switch (lower)
-    {
-    case 0x0:
-
-        if (upper & 0x1)
-            addressMode = AddressMode::RELATIVE;
-        else if (upper == 0x2)
-            addressMode = AddressMode::J_ABSOLUTE;
-        else if (upper < 8)
-            addressMode = AddressMode::IMPLIED;
-        else if (upper > 8)
-            addressMode = AddressMode::IMMEDIATE;
-        switch (upper)
-        {
-        case 0:
-            instruction = Instruction::BRK;
-            break;
-        case 1:
-            instruction = Instruction::BPL;
-            break;
-        case 2:
-            instruction = Instruction::JSR;
-            break;
-        case 3:
-            instruction = Instruction::BMI;
-            break;
-        case 4:
-            instruction = Instruction::RTI;
-            break;
-        case 5:
-            instruction = Instruction::BVC;
-            break;
-        case 6:
-            instruction = Instruction::RTS;
-            break;
-        case 7:
-            instruction = Instruction::BVS;
-            break;
-        case 9:
-            instruction = Instruction::BCC;
-            break;
-        case 0xA:
-            instruction = Instruction::LDY;
-            break;
-        case 0xB:
-            instruction = Instruction::BCS;
-            break;
-        case 0xC:
-            instruction = Instruction::CPY;
-            break;
-        case 0xD:
-            instruction = Instruction::BNE;
-            break;
-        case 0xE:
-            instruction = Instruction::CPX;
-            break;
-        case 0xF:
-            instruction = Instruction::BEQ;
-            break;
-        }
-        break;
-
-    case 0x1:
-
-        if (upper & 1)
-            addressMode = AddressMode::INDIRECT_Y_INDEX;
-        else
-            addressMode = AddressMode::INDIRECT_X_INDEX;
-        instruction = Low159D(upper);
-        break;
-
-    case 0x2:
-
-        if (upper == 0xA)
-        {
-            instruction = Instruction::LDX;
-            addressMode = AddressMode::IMMEDIATE;
-        }
-
-        break;
-
-    case 0x4:
-
-        switch (upper)
-        {
-        case 0x2:
-            instruction = Instruction::BIT;
-            addressMode = AddressMode::ZEROPAGE;
-            break;
-        case 0x8:
-            instruction = Instruction::STY;
-            addressMode = AddressMode::ZEROPAGE;
-            break;
-        case 0x9:
-            instruction = Instruction::STY;
-            addressMode = AddressMode::ZEROPAGE_X_INDEX;
-            break;
-        case 0xA:
-            instruction = Instruction::LDY;
-            addressMode = AddressMode::ZEROPAGE;
-            break;
-        case 0xB:
-            instruction = Instruction::LDY;
-            addressMode = AddressMode::ZEROPAGE_X_INDEX;
-            break;
-        case 0xC:
-            instruction = Instruction::CPY;
-            addressMode = AddressMode::ZEROPAGE;
-            break;
-        case 0xE:
-            instruction = Instruction::CPX;
-            addressMode = AddressMode::ZEROPAGE;
-            break;
-        }
-
-        break;
-
-    case 0x5:
-        if (upper & 1)
-            addressMode = AddressMode::ZEROPAGE_X_INDEX;
-        else
-            addressMode = AddressMode::ZEROPAGE;
-
-        instruction = Low159D(upper);
-
-        break;
-
-    case 0x6:
-
-        if (upper & 1)
-        {
-            if (upper == 9 || upper == 0xB)
-                addressMode = AddressMode::ZEROPAGE_Y_INDEX;
-            else
-                addressMode = AddressMode::ZEROPAGE_X_INDEX;
-        }
-        else
-            addressMode = AddressMode::ZEROPAGE;
-
-        instruction = Low6E(upper);
-
-        break;
-
-    case 0x8:
-        addressMode = AddressMode::IMPLIED;
-        switch (upper)
-        {
-        case 0:
-            instruction = Instruction::PHP;
-            break;
-        case 1:
-            instruction = Instruction::CLC;
-            break;
-        case 2:
-            instruction = Instruction::PLP;
-            break;
-        case 3:
-            instruction = Instruction::SEC;
-            break;
-        case 4:
-            instruction = Instruction::PHA;
-            break;
-        case 5:
-            instruction = Instruction::CLI;
-            break;
-        case 6:
-            instruction = Instruction::PLA;
-            break;
-        case 7:
-            instruction = Instruction::SEI;
-            break;
-        case 8:
-            instruction = Instruction::DEY;
-            break;
-        case 9:
-            instruction = Instruction::TYA;
-            break;
-        case 0xA:
-            instruction = Instruction::TAY;
-            break;
-        case 0xB:
-            instruction = Instruction::CLV;
-            break;
-        case 0xC:
-            instruction = Instruction::INY;
-            break;
-        case 0xD:
-            instruction = Instruction::CLD;
-            break;
-        case 0xE:
-            instruction = Instruction::INX;
-            break;
-        case 0xF:
-            instruction = Instruction::SED;
-            break;
-        }
-        break;
-
-    case 0x9:
-        if (upper & 1)
-            addressMode = AddressMode::ABSOLUTE_Y_INDEX;
-        else
-        {
-            if (upper != 8)
-                addressMode = AddressMode::IMMEDIATE;
-        }
-        instruction = Low159D(upper);
-        break;
-
-    case 0xA:
-        if (upper > 7)
-            addressMode = AddressMode::IMPLIED;
-        else
-            addressMode = AddressMode::ACCUMULATOR;
-        switch (upper)
-        {
-        case 0:
-            instruction = Instruction::ASL;
-            break;
-        case 2:
-            instruction = Instruction::ROL;
-            break;
-        case 4:
-            instruction = Instruction::LSR;
-            break;
-        case 6:
-            instruction = Instruction::ROR;
-            break;
-        case 8:
-            instruction = Instruction::TXA;
-            break;
-        case 9:
-            instruction = Instruction::TXS;
-            break;
-        case 0xA:
-            instruction = Instruction::TAX;
-            break;
-        case 0xB:
-            instruction = Instruction::TSX;
-            break;
-        case 0xC:
-            instruction = Instruction::DEX;
-            break;
-        case 0xE:
-            instruction = Instruction::NOP;
-            break;
-        }
-        break;
-
-    case 0xC:
-        switch (upper)
-        {
-        case 0x2:
-            instruction = Instruction::BIT;
-            addressMode = AddressMode::ABSOLUTE;
-            break;
-        case 0x4:
-            instruction = Instruction::JMP;
-            addressMode = AddressMode::J_ABSOLUTE;
-            break;
-        case 0x6:
-            instruction = Instruction::JMP;
-            addressMode = AddressMode::INDIRECT;
-            break;
-        case 0x8:
-            instruction = Instruction::STY;
-            addressMode = AddressMode::ABSOLUTE;
-            break;
-        case 0xA:
-            instruction = Instruction::LDY;
-            addressMode = AddressMode::ABSOLUTE;
-            break;
-        case 0xB:
-            instruction = Instruction::LDY;
-            addressMode = AddressMode::ABSOLUTE_X_INDEX;
-            break;
-        case 0xC:
-            instruction = Instruction::CPY;
-            addressMode = AddressMode::ABSOLUTE;
-            break;
-        case 0xE:
-            instruction = Instruction::CPX;
-            addressMode = AddressMode::ABSOLUTE;
-            break;
-        }
-
-        break;
-
-    case 0xD:
-        if (upper & 1)
-            addressMode = AddressMode::ABSOLUTE_X_INDEX;
-        else
-            addressMode = AddressMode::ABSOLUTE;
-        instruction = Low159D(upper);
-        break;
-
-    case 0xE:
-        if (upper & 1)
-        {
-            if (upper == 0xB)
-                addressMode = AddressMode::ABSOLUTE_Y_INDEX;
-            else if (upper != 0x9)
-                addressMode = AddressMode::ABSOLUTE_X_INDEX;
-        }
-        else
-            addressMode = AddressMode::ABSOLUTE;
-
-        instruction = Low6E(upper);
-        break;
-
-    default:
-        cerr << "Invalid lower nybble of opcode " << std::hex << opcode << "\n";
-        exit(6);
-    }
-}
-
-uint16_t NES::GetOperandValue(AddressMode addressMode, uint16_t &address)
-{
+    uint16_t address;
     switch(addressMode)
     {
-    case ACCUMULATOR: return registers.accumulator;
-    case J_ABSOLUTE: return Read16Bit(registers.programCounter, true);
+    case ACCUMULATOR:
+        return pair<uint16_t,uint16_t>(registers.accumulator,0);
     case ABSOLUTE:
         address = Read16Bit(registers.programCounter, true);
-        return Read8Bit(address, false);
+        return pair<uint16_t,uint16_t>(Read8Bit(address, false), address);
     case ABSOLUTE_X_INDEX: 
         address = Read16Bit(registers.programCounter, true) + registers.Xregister;
-        return Read8Bit(address, false);
+        return pair<uint16_t, uint16_t>(Read8Bit(address, false), address);
     case ABSOLUTE_Y_INDEX:
         address = Read16Bit(registers.programCounter, true) + registers.Yregister;
-        return Read8Bit(address, false);
-    case IMMEDIATE: return Read8Bit(registers.programCounter, true);
-    case IMPLIED: return 0;
+        return pair<uint16_t, uint16_t>(Read8Bit(address, false), address);
+    case IMMEDIATE: return pair<uint16_t,uint16_t>(Read8Bit(registers.programCounter, true),0);
+    case IMPLIED: return pair<uint16_t,uint16_t>(0,0);
     case INDIRECT:
         address = Read16Bit(registers.programCounter, true);
-        return Read16Bit(address, false);
+        return pair<uint16_t, uint16_t>(Read16Bit(address, false), address);
     case INDIRECT_X_INDEX:
         address = (Read8Bit(registers.programCounter, true) + registers.Xregister) % 256;
         address = Read16Bit(address, false);
-        return Read8Bit(address,false);
+        return pair<uint16_t, uint16_t>(Read8Bit(address, false), address);
     case INDIRECT_Y_INDEX:
         address = Read8Bit(registers.programCounter, true);
         address = Read16Bit(address, false) + registers.Yregister;
-        return Read8Bit(address, false);
-    case RELATIVE: return Read8Bit(registers.programCounter, true);
+        return pair<uint16_t, uint16_t>(Read16Bit(address, false), address);
+    case RELATIVE:
+        return pair<uint16_t, uint16_t>(Read8Bit(registers.programCounter, true),0);
     case ZEROPAGE:
         address = Read8Bit(registers.programCounter, true);
-        return Read8Bit(address, false);
+        return pair<uint16_t, uint16_t>(Read8Bit(address, false), address);
     case ZEROPAGE_X_INDEX:
         address = (Read8Bit(registers.programCounter, true)+registers.Xregister)%256;
-        return Read8Bit(address, false);
+        return pair<uint16_t, uint16_t>(Read8Bit(address, false), address);
     case ZEROPAGE_Y_INDEX:
         address = (Read8Bit(registers.programCounter, true) + registers.Yregister) % 256;
-        return Read8Bit(address, false);
+        return pair<uint16_t, uint16_t>(Read8Bit(address, false), address);
     }
-    return -1;
+    return pair<uint16_t,uint16_t>(-1,-1);
 }
 
-void NES::SetProcessorStatusBit(int bitNum, bool set)
+void NES::SetProcessorStatusFlag(int bitNum, bool set)
 {
     uint8_t setBit = 1 << bitNum;
     uint8_t mask = ~setBit;
@@ -530,404 +180,479 @@ void NES::SetProcessorStatusBit(int bitNum, bool set)
         registers.processorStatus &= mask;
 }
 
-
-
-void NES::UpdateProcessorStatus(uint16_t result, int32_t signedResult, Instruction instruction)
+uint8_t NES::GetProcessorStatusFlag(int bitNum)
 {
-    switch(instruction)
+    return registers.processorStatus & 1 << bitNum;
+}
+
+void NES::UpdateZeroAndNegativeFlags(uint16_t result)
+{
+    SetProcessorStatusFlag(ZERO, (result & 0xFF)==0);
+    SetProcessorStatusFlag(NEGATIVE, result & 0b10000000);
+}
+
+void NES::break6502()
+{//TODO read some stuff on break flag. make sure to implement correctly
+    if(!GetProcessorStatusFlag(INTERRUPT_DISABLE))
     {
-    case ADC:
-        SetProcessorStatusBit(OVERFLOW, signedResult > 127 || signedResult < -128);
-    case ASL:
-    case ROL:
-        SetProcessorStatusBit(CARRY, result > 255);
-    case AND:
-    case DEC:
-    case DEX:
-    case DEY:
-    case EOR:
-    case INC:
-    case INX:
-    case INY:
-    case LDA:
-    case LDX:
-    case LDY:
-    case LSR:
-    case ORA:
-    case PLA:
-    case ROR:
-    case TAX:
-    case TAY:
-    case TSX:
-    case TXA:
-    case TYA:
-        SetProcessorStatusBit(ZERO, (result & 0xFF)==0);
-        SetProcessorStatusBit(NEGATIVE, result & 0b10000000);
-    break;
-    case CMP:
-    case CPX:
-    case CPY:
-        SetProcessorStatusBit(CARRY, (int16_t)result > 0);
-        SetProcessorStatusBit(ZERO, (result & 0xFF) ==0);
-        SetProcessorStatusBit(NEGATIVE, result & 0b10000000);
-    break;
-    case BIT:
-        SetProcessorStatusBit(NEGATIVE, result & 0b10000000);
-        SetProcessorStatusBit(OVERFLOW, result & 0b01000000);
-        SetProcessorStatusBit(ZERO, (result & registers.accumulator)==0);
-    break;
-    case BRK:
-        //break flag is weird and doesn't really exist? TODO read more documentation on this
-        break;
-    case CLC:
-        SetProcessorStatusBit(CARRY, false);
-    break;
-    case CLD:
-        SetProcessorStatusBit(DECIMAL, false);
-    break;
-    case CLI:
-        SetProcessorStatusBit(INTERRUPT_DISABLE, false);
-    break;
-    case CLV:
-        SetProcessorStatusBit(OVERFLOW, false);
-    break;
-    case SEC:
-        SetProcessorStatusBit(CARRY, true);
-    break;
-    case SED:
-        SetProcessorStatusBit(DECIMAL, true);
-    break;
-    case SEI:
-        SetProcessorStatusBit(INTERRUPT_DISABLE, true);
-    break;
+        PushStack16Bit(registers.programCounter);
+        PushStack8Bit(registers.processorStatus);
+        registers.programCounter = Read16Bit(0xFFFE, false);
+    }
+    PPUcycles+=21;
+}
+
+void NES::or6502(uint8_t value)
+{
+    registers.accumulator |= value;
+    UpdateZeroAndNegativeFlags(registers.accumulator);
+    PPUcycles+=6;
+}
+
+void NES::and6502(uint8_t value)
+{
+    registers.accumulator &= value;
+    UpdateZeroAndNegativeFlags(registers.accumulator);
+    PPUcycles += 6;
+}
+
+void NES::eor6502(uint8_t value)
+{
+    registers.accumulator ^= value;
+    UpdateZeroAndNegativeFlags(registers.accumulator);
+    PPUcycles += 6;
+}
+
+void NES::bit6502(uint8_t value)
+{
+    SetProcessorStatusFlag(ZERO, registers.accumulator & value);
+    SetProcessorStatusFlag(OVERFLOW, value & 0b1000000);
+    SetProcessorStatusFlag(NEGATIVE, value & 0b10000000);
+    PPUcycles += 9;
+}
+
+void NES::shift6502(bool left, bool rotate, bool acc, std::pair<uint16_t, uint16_t> valueAddress)
+{
+    uint8_t value = valueAddress.first;
+    SetProcessorStatusFlag(CARRY, left ? value & 0b10000000 : value & 1);
+    value = left ? value << 1 : value >> 1;
+    if(GetProcessorStatusFlag(CARRY) && rotate)
+        value |= left ? 1 : 0b10000000;
+    UpdateZeroAndNegativeFlags(value);
+    if(acc) registers.accumulator=value;
+    else Write8Bit(valueAddress.second, value);
+    PPUcycles+=6;
+}
+
+void NES::branch6502(StatusFlags flag, bool set, int8_t value)
+{
+    if((bool)GetProcessorStatusFlag(flag) == set)
+        registers.programCounter += value;
+    PPUcycles+=6;
+}
+
+void NES::jsr6502()
+{
+    PushStack16Bit(registers.programCounter+1);
+    registers.programCounter = Read16Bit(registers.programCounter, false);
+    PPUcycles+=18;
+}
+
+void NES::rti6502()
+{
+    registers.processorStatus = PullStack8Bit();
+    registers.programCounter = PullStack16Bit();
+    PPUcycles += 18;
+}
+
+void NES::add6502(uint8_t value)
+{
+    uint16_t result = value + registers.accumulator + GetProcessorStatusFlag(CARRY);
+    int16_t signedResult = (int8_t)value + (int8_t)registers.accumulator + GetProcessorStatusFlag(CARRY);
+    registers.accumulator=result;
+    SetProcessorStatusFlag(CARRY, result > 255);
+    SetProcessorStatusFlag(OVERFLOW, signedResult > 127 || signedResult < -128);
+    UpdateZeroAndNegativeFlags(registers.accumulator);
+    PPUcycles+=6;
+}
+
+void NES::subtract6502(uint8_t value)
+{
+    uint8_t notCarry = 1 - GetProcessorStatusFlag(CARRY);
+    uint16_t result = registers.accumulator - value - notCarry;
+    int16_t signedResult = (int8_t)registers.accumulator - (int8_t)value - notCarry;
+    registers.accumulator = result;
+    SetProcessorStatusFlag(CARRY, (uint16_t)registers.accumulator >= (uint16_t)value + notCarry);
+    SetProcessorStatusFlag(OVERFLOW, signedResult > 127 || signedResult < -128);
+    UpdateZeroAndNegativeFlags(registers.accumulator);
+    PPUcycles += 6;
+}
+
+void NES::store6502(uint16_t address, uint8_t value)
+{
+    //std::cout << "attempted to write 0x" << std::hex << (uint32_t)value << " to 0x" << address << "\n";
+    Write8Bit(address, value);
+    PPUcycles += 9;
+}
+
+void NES::load6502(uint8_t value, uint8_t& dest)
+{
+    dest=value;
+    UpdateZeroAndNegativeFlags(value);
+    PPUcycles += 6;
+}
+
+void NES::inc6502(uint8_t& value, bool dec)
+{
+    if(dec) value--;
+    else value++;
+    UpdateZeroAndNegativeFlags(value);
+    PPUcycles+=9;
+}
+
+void NES::transfer6502(uint8_t source, uint8_t &destination, bool updateFlags)
+{
+    destination=source;
+    if(updateFlags) UpdateZeroAndNegativeFlags(source);
+    PPUcycles += 6;
+}
+
+void NES::compare6502(uint8_t value, uint8_t value2)
+{
+    SetProcessorStatusFlag(CARRY, value >= value2);
+    UpdateZeroAndNegativeFlags(value - value2);
+    PPUcycles+=6;
+}
+void NES::incMem6502(std::pair<uint16_t, uint16_t> valueAddress, bool dec)
+{
+    uint8_t value = valueAddress.first;
+    if(dec) value--;
+    else value++;
+    Write8Bit(valueAddress.second, value);
+    UpdateZeroAndNegativeFlags(value);
+    PPUcycles+=15;
+}
+
+void printOpcode(uint8_t opcode)
+{
+    switch(opcode)
+    {
+    case 0x00: cout << "BRK" << '\n'; return;
+    case 0x01: cout << "ORA x ind" << '\n'; return;
+    case 0x05: cout << "ORA zpg" << '\n'; return;
+    case 0x06: cout << "ASL zpg" << '\n'; return;
+    case 0x08: cout << "PHP" << '\n'; return;
+    case 0x09: cout << "ORA #" << '\n'; return;
+    case 0x0A: cout << "ASL A" << '\n'; return;
+    case 0x0D: cout << "ORA abs" << '\n'; return;
+    case 0x0E: cout << "ASL abs" << '\n'; return;
+    case 0x10: cout << "BPL" << '\n'; return;
+    case 0x11: cout << "ORA ind y" << '\n'; return;
+    case 0x15: cout << "ORA zpg x" << '\n'; return;
+    case 0x16: cout << "ASL zpg x" << '\n'; return;
+    case 0x18: cout << "CLC" << '\n'; return;
+    case 0x19: cout << "ORA abs y" << '\n'; return;
+    case 0x1D: cout << "ORA abs x" << '\n'; return;
+    case 0x1E: cout << "ASL abs x" << '\n'; return;
+    case 0x20: cout << "JSR" << '\n'; return;
+    case 0x21: cout << "AND x ind" << '\n'; return;
+    case 0x24: cout << "BIT zpg" << '\n'; return;
+    case 0x25: cout << "AND zpg" << '\n'; return;
+    case 0x26: cout << "ROL zpg" << '\n'; return;
+    case 0x28: cout << "PLP" << '\n'; return;
+    case 0x29: cout << "AND #" << '\n'; return;
+    case 0x2A: cout << "ROL A" << '\n'; return;
+    case 0x2C: cout << "BIT abs" << '\n'; return;
+    case 0x2D: cout << "AND abs" << '\n'; return;
+    case 0x2E: cout << "ROL abs" << '\n'; return;
+    case 0x30: cout << "BMI" << '\n'; return;
+    case 0x31: cout << "AND ind y" << '\n'; return;
+    case 0x35: cout << "AND zpg x" << '\n'; return;
+    case 0x36: cout << "ROL zpg x" << '\n'; return;
+    case 0x38: cout << "SEC" << '\n'; return;
+    case 0x39: cout << "AND abs y" << '\n'; return;
+    case 0x3D: cout << "AND abs x" << '\n'; return;
+    case 0x3E: cout << "ROL abs x" << '\n'; return;
+    case 0x40: cout << "RTI" << '\n'; return;
+    case 0x41: cout << "EOR x ind" << '\n'; return;
+    case 0x45: cout << "EOR zpg" << '\n'; return;
+    case 0x46: cout << "LSR zpg" << '\n'; return;
+    case 0x48: cout << "PHA" << '\n'; return;
+    case 0x49: cout << "EOR #" << '\n'; return;
+    case 0x4A: cout << "LSR A" << '\n'; return;
+    case 0x4C: cout << "JMP abs" << '\n'; return;
+    case 0x4D: cout << "EOR abs" << '\n'; return;
+    case 0x4E: cout << "LSR abs" << '\n'; return;
+    case 0x50: cout << "BVC" << '\n'; return;
+    case 0x51: cout << "EOR ind y" << '\n'; return;
+    case 0x55: cout << "EOR zpg x" << '\n'; return;
+    case 0x56: cout << "LSR zpg x" << '\n'; return;
+    case 0x58: cout << "CLI" << '\n'; return;
+    case 0x59: cout << "EOR abs y" << '\n'; return;
+    case 0x5D: cout << "EOR abs x" << '\n'; return;
+    case 0x5E: cout << "LSR abs X" << '\n'; return;
+    case 0x60: cout << "RTS" << '\n'; return;
+    case 0x61: cout << "ADC x ind" << '\n'; return;
+    case 0x65: cout << "ADC zpg" << '\n'; return;
+    case 0x66: cout << "ROR zpg" << '\n'; return;
+    case 0x68: cout << "PLA" << '\n'; return;
+    case 0x69: cout << "ADC #" << '\n'; return;
+    case 0x6A: cout << "ROR A" << '\n'; return;
+    case 0x6C: cout << "JMP ind" << '\n'; return;
+    case 0x6D: cout << "ADC abs" << '\n'; return;
+    case 0x6E: cout << "ROR abs" << '\n'; return;
+    case 0x70: cout << "BVS" << '\n'; return;
+    case 0x71: cout << "ADC ind y" << '\n'; return;
+    case 0x75: cout << "ADC zpg x" << '\n'; return;
+    case 0x76: cout << "ROR zpg x" << '\n'; return;
+    case 0x78: cout << "SEI" << '\n'; return;
+    case 0x79: cout << "ADC abs y" << '\n'; return;
+    case 0x7D: cout << "ADC abs x" << '\n'; return;
+    case 0x7E: cout << "ROR abs x" << '\n'; return;
+    case 0x81: cout << "STA x ind" << '\n'; return;
+    case 0x84: cout << "STY zpg" << '\n'; return;
+    case 0x85: cout << "STA zpg" << '\n'; return;
+    case 0x86: cout << "STX zpg" << '\n'; return;
+    case 0x88: cout << "DEY" << '\n'; return;
+    case 0x8A: cout << "TXA" << '\n'; return;
+    case 0x8C: cout << "STY abs" << '\n'; return;
+    case 0x8D: cout << "STA abs" << '\n'; return;
+    case 0x8E: cout << "STX abs" << '\n'; return;
+    case 0x90: cout << "BCC" << '\n'; return;
+    case 0x91: cout << "STA ind Y" << '\n'; return;
+    case 0x94: cout << "STY zpg x" << '\n'; return;
+    case 0x95: cout << "STA zpg x" << '\n'; return;
+    case 0x96: cout << "STX zpg y" << '\n'; return;
+    case 0x98: cout << "TYA" << '\n'; return;
+    case 0x99: cout << "STA abs y" << '\n'; return;
+    case 0x9A: cout << "TXS" << '\n'; return;
+    case 0x9D: cout << "STA abs x" << '\n'; return;
+    case 0xA0: cout << "LDY #" << '\n'; return;
+    case 0xA1: cout << "LDA x ind" << '\n'; return;
+    case 0xA2: cout << "LDX #" << '\n'; return;
+    case 0xA4: cout << "LDY zpg" << '\n'; return;
+    case 0xA5: cout << "LDA zpg" << '\n'; return;
+    case 0xA6: cout << "LDX zpg" << '\n'; return;
+    case 0xA8: cout << "TAY" << '\n'; return;
+    case 0xA9: cout << "LDA #" << '\n'; return;
+    case 0xAA: cout << "TAX" << '\n'; return;
+    case 0xAC: cout << "LDY abs" << '\n'; return;
+    case 0xAD: cout << "LDA abs" << '\n'; return;
+    case 0xAE: cout << "LDX abs" << '\n'; return;
+    case 0xB0: cout << "BCS" << '\n'; return;
+    case 0xB1: cout << "LDA ind y" << '\n'; return;
+    case 0xB4: cout << "LDY zpg x" << '\n'; return;
+    case 0xB5: cout << "LDA zpg x" << '\n'; return;
+    case 0xB6: cout << "LDX zpg y" << '\n'; return;
+    case 0xB8: cout << "CLV" << '\n'; return;
+    case 0xB9: cout << "LDA abs y" << '\n'; return;
+    case 0xBA: cout << "TSX" << '\n'; return;
+    case 0xBC: cout << "LDY abs x" << '\n'; return;
+    case 0xBD: cout << "LDA abs x" << '\n'; return;
+    case 0xBE: cout << "LDX abs y" << '\n'; return;
+    case 0xC0: cout << "CPY #" << '\n'; return;
+    case 0xC1: cout << "CMP x ind" << '\n'; return;
+    case 0xC4: cout << "CPY zpg" << '\n'; return;
+    case 0xC5: cout << "CMP zpg" << '\n'; return;
+    case 0xC6: cout << "DEC zpg" << '\n'; return;
+    case 0xC8: cout << "INY" << '\n'; return;
+    case 0xC9: cout << "CMP #" << '\n'; return;
+    case 0xCA: cout << "DEX" << '\n'; return;
+    case 0xCC: cout << "CPY abs" << '\n'; return;
+    case 0xCD: cout << "CMP abs" << '\n'; return;
+    case 0xCE: cout << "DEC abs" << '\n'; return;
+    case 0xD0: cout << "BNE" << '\n'; return;
+    case 0xD1: cout << "CMP ind y" << '\n'; return;
+    case 0xD5: cout << "CMP zpg x" << '\n'; return;
+    case 0xD6: cout << "DEC zpg x" << '\n'; return;
+    case 0xD8: cout << "CLD" << '\n'; return;
+    case 0xD9: cout << "CMP abs y" << '\n'; return;
+    case 0xDD: cout << "CMP abs x" << '\n'; return;
+    case 0xDE: cout << "DEC abs x" << '\n'; return;
+    case 0xE0: cout << "CPX #" << '\n'; return;
+    case 0xE1: cout << "SBC x ind" << '\n'; return;
+    case 0xE4: cout << "CPX zpg" << '\n'; return;
+    case 0xE5: cout << "SBC zpg" << '\n'; return;
+    case 0xE6: cout << "INC zpg" << '\n'; return;
+    case 0xE8: cout << "INX" << '\n'; return;
+    case 0xE9: cout << "SBC #" << '\n'; return;
+    case 0xEA: cout << "NOP" << '\n'; return;
+    case 0xEC: cout << "CPX abs" << '\n'; return;
+    case 0xED: cout << "SBC abs" << '\n'; return;
+    case 0xEE: cout << "INC abs" << '\n'; return;
+    case 0xF0: cout << "BEQ" << '\n'; return;
+    case 0xF1: cout << "SBC ind y" << '\n'; return;
+    case 0xF5: cout << "SBC zpg x" << '\n'; return;
+    case 0xF6: cout << "INC zpg x" << '\n'; return;
+    case 0xF8: cout << "SED" << '\n'; return;
+    case 0xF9: cout << "SBC abs y" << '\n'; return;
+    case 0xFD: cout << "SBC abs x" << '\n'; return;
+    case 0xFE: cout << "INC abs x" << '\n'; return;
+    default: 
+        cerr << "invalid opcode " << std::setfill('0') << std::setw(2) << std::hex << opcode << "\n";
     }
 }
 
-void NES::Execute(Instruction instruction, AddressMode addressMode)
+void NES::ExecuteStep(uint8_t opcode)
 {
-    uint16_t address;
-    uint16_t operandValue = GetOperandValue(addressMode, address);
-    uint32_t result;
-    int32_t signedResult;
-    
-    switch(instruction)
-    {//TODO potential improvement. add to PPUcycles more accurately, taking into account address mode and whatever
-    case ADC:
-        result = (registers.processorStatus & 1) + registers.accumulator + operandValue;
-        signedResult = (int8_t)registers.accumulator + (int8_t)operandValue + (registers.processorStatus & 1);
-        registers.accumulator=result;
-        //cout << "A=" << (int)registers.accumulator << '\n';
-        PPUcycles+=6;
-    break;
-    case AND:
-        registers.accumulator &= operandValue;
-        result = registers.accumulator;
-        //cout << "A=" << (int)registers.accumulator << '\n';
-        PPUcycles+=6;
-    break;
-    case ASL:
-        result = operandValue << 1;
-        if(addressMode == ACCUMULATOR)
-        {
-            registers.accumulator=result;
-            //cout << "A=" << (int)registers.accumulator << '\n';
-        }
-        else
-        {
-            Write8Bit(address, result);
-            //cout << std::hex << address << "=" <<result << '\n';
-        }
-        PPUcycles+=6;
-    break;
-    case BCC:
-        if(!(registers.processorStatus & 1))
-        {
-            registers.programCounter += (int8_t) operandValue;
-            //cout << "PC=" << std::hex << registers.programCounter << "\n";
-        }
-        PPUcycles+=6;
-    break;
-    case BCS:
-        if (registers.processorStatus & 1)
-        {
-            registers.programCounter += (int8_t)operandValue;
-            //cout << "PC=" << std::hex << registers.programCounter << "\n";
-        }
-        PPUcycles += 6;
-    break;
-    case BEQ:
-        if (registers.processorStatus & 0b00000010)
-        {
-            registers.programCounter += (int8_t)operandValue;
-            //cout << "PC=" << std::hex << registers.programCounter << "\n";
-        }
-        PPUcycles += 6;
-    break;
-    case BIT:
-        result = registers.accumulator & operandValue;
-        PPUcycles+=9;
-    break;
-    case BMI:
-        if (registers.processorStatus & 0b10000000)
-        {
-            registers.programCounter += (int8_t)operandValue;
-            //cout << "PC=" << std::hex << registers.programCounter << "\n";
-        }
-        PPUcycles += 6;
-    break;
-    case BNE:
-        if (!(registers.processorStatus & 0b00000010))
-        {
-            registers.programCounter += (int8_t)operandValue;
-            //cout << "PC=" << std::hex << registers.programCounter << "\n";
-        }
-        PPUcycles += 6;
-    break;
-    case BPL:
-        if (!(registers.processorStatus & 0b10000000))
-        {
-            registers.programCounter += (int8_t)operandValue;
-            //cout << "PC=" << std::hex << registers.programCounter << "\n";
-        }
-        PPUcycles += 6;
-    break;
-    case BRK:
-        if(!(registers.processorStatus & 0b00000100))
-        {
-            PushStack16Bit(registers.programCounter);
-            PushStack8Bit(registers.processorStatus);
-            registers.programCounter = Read16Bit(0xFFFE, false);
-        }
-
-        PPUcycles+=21;
-    break;
-    case BVC:
-        if (!(registers.processorStatus & 0b01000000))
-        {
-            registers.programCounter += (int8_t)operandValue;
-            //cout << "PC=" << std::hex << registers.programCounter << "\n";
-        }
-        PPUcycles += 6;
-    break;
-    case BVS:
-        if (registers.processorStatus & 0b01000000)
-        {
-            registers.programCounter += (int8_t)operandValue;
-            //cout << "PC=" << std::hex << registers.programCounter << "\n";
-        }
-        PPUcycles += 6;
-    break;
-    case CMP:
-        result = registers.accumulator - operandValue;
-        //cout << "compare result=" << (int)result << "\n";
-        PPUcycles += 6;
-    break;
-    case CPX:
-        result = registers.Xregister - operandValue;
-        //cout << "compare result=" << result << "\n";
-        PPUcycles += 6;
-    break;
-    case CPY:
-        result = registers.Yregister - operandValue;
-        //cout << "compare result=" << result << "\n";
-        PPUcycles += 6;
-    break;
-    case DEC:
-        result = (operandValue-1);
-        Write8Bit(address, result);
-        //cout << std::hex << address << "=" << result << '\n';
-        PPUcycles+=15;
-    break;
-    case DEX:
-        result = --registers.Xregister;
-        //cout << "X=" << (int)registers.Xregister << '\n';
-        PPUcycles+=6;
-    break;
-    case DEY:
-        result = --registers.Yregister;
-        //cout << "Y=" << (int)registers.Yregister << '\n';
-        PPUcycles+=6;
-    break;
-    case EOR:
-        registers.accumulator ^= operandValue;
-        result = registers.accumulator;
-        //cout << "A=" << (int)registers.accumulator << '\n';
-        PPUcycles+=6;
-    break;
-    case INC:
-        result = (operandValue + 1);
-        Write8Bit(address, result);
-        //cout << std::hex << address << "=" << result << '\n';
-        PPUcycles += 15;
-        break;
-    case INX:
-        result = ++registers.Xregister;
-        //cout << "X=" << (int)registers.Xregister << '\n';
-        PPUcycles += 6;
-        break;
-    case INY:
-        result = ++registers.Yregister;
-        //cout << "Y=" << (int)registers.Yregister << '\n';
-        PPUcycles += 6;
-        break;
-    case JMP:
-        registers.programCounter = operandValue;
-        //cout << "PC=" << std::hex << registers.programCounter << "\n";
-        PPUcycles+=9;
-    break;
-    case JSR:
-        PushStack16Bit(registers.programCounter);
-        registers.programCounter = operandValue;
-        //cout << "PC=" << std::hex << registers.programCounter << "\n";
-        PPUcycles +=18;
-    break;
-    case LDA:
-        result = operandValue;
-        registers.accumulator = operandValue;
-        //cout << "A=" << (int)registers.accumulator << '\n';
-        PPUcycles+=6;
-    break;
-    case LDX:
-        result = operandValue;
-        registers.Xregister = operandValue;
-        //cout << "X=" << (int)registers.Xregister << '\n';
-        PPUcycles += 6;
-        break;
-    case LDY:
-        result = operandValue;
-        registers.Yregister = operandValue;
-        //cout << "Y=" << (int)registers.Yregister << '\n';
-        PPUcycles += 6;
-        break;
-    case LSR: 
-        //some information is lost before we make it to UpdateProcessorStatus. have to do it here
-        SetProcessorStatusBit(CARRY, operandValue&1);
-
-        result = operandValue >> 1;
-        if (addressMode == ACCUMULATOR)
-            registers.accumulator = result;
-        else
-            Write8Bit(address, result);
-        PPUcycles += 6;
-    break;
-    case ORA:
-        registers.accumulator |= operandValue;
-        result = registers.accumulator;
-        //cout << "A=" << (int)registers.accumulator << '\n';
-        PPUcycles += 6;
-        break;
-    case PHA:
-        PushStack8Bit(registers.accumulator);
-        PPUcycles+=9;
-    break;
-    case PHP:
-        PushStack8Bit(registers.processorStatus);
-        PPUcycles+=9;
-    break;
-    case PLA:
-        registers.accumulator = PullStack8Bit();
-        result = registers.accumulator;
-        //cout << "A=" << (int)registers.accumulator << '\n';
-        PPUcycles+=12;
-    break;
-    case PLP:
-        registers.processorStatus = PullStack8Bit();
-        PPUcycles+=12;
-    break;
-    case ROL:
-        result = (operandValue << 1) | (registers.processorStatus & 1);
-        if (addressMode == ACCUMULATOR)
-            registers.accumulator = result;
-        else
-            Write8Bit(address, result);
-        PPUcycles += 6;
-    break;
-    case ROR:
-        //some information is lost before we make it to UpdateProcessorStatus. have to do it here
-        
-        result = (operandValue >> 1) | ((registers.processorStatus & 1) << 7);
-        if (addressMode == ACCUMULATOR)
-            registers.accumulator = result;
-        else
-            Write8Bit(address, result);
-
-        SetProcessorStatusBit(CARRY, operandValue & 1);
-
-        PPUcycles += 6;
-    break;
-    case RTI:
-        registers.processorStatus = PullStack8Bit();
-        registers.programCounter = PullStack16Bit();
-        PPUcycles+=18;
-    break;
-    case RTS:
-        registers.programCounter = PullStack16Bit();
-        PPUcycles += 18;
-    break;
-    case SBC:
-        result = registers.accumulator - operandValue - (1-(registers.processorStatus & 1));
-        registers.accumulator = result;
-        signedResult = (int8_t)registers.accumulator - (int8_t)operandValue - (1-(registers.processorStatus & 1));
-        //looks like a pain to do update in UpdateProcessorStatus so just do it here
-        SetProcessorStatusBit(CARRY, operandValue + (1 - (registers.processorStatus & 1)) <= registers.accumulator);
-        SetProcessorStatusBit(ZERO, registers.accumulator==0);
-        SetProcessorStatusBit(OVERFLOW, signedResult > 127 || signedResult < -128);
-        SetProcessorStatusBit(NEGATIVE, registers.accumulator & 0b10000000);
-        PPUcycles += 6;
-        //cout << "A=" << (int)registers.accumulator << '\n';
-        break;
-    case STA:
-        Write8Bit(address, registers.accumulator);
-        PPUcycles+=9;
-    break;
-    case STX:
-        Write8Bit(address, registers.Xregister);
-        PPUcycles += 9;
-    break;
-    case STY:
-        Write8Bit(address, registers.Yregister);
-        PPUcycles += 9;
-    break;
-    case TAX:
-        result= registers.accumulator;
-        registers.Xregister=registers.accumulator;
-        PPUcycles+=6;
-    break;
-    case TAY:
-        result = registers.accumulator;
-        registers.Yregister = registers.accumulator;
-        PPUcycles += 6;
-    break;
-    case TSX:
-        result = registers.stackPointer;
-        registers.Xregister = registers.stackPointer;
-        PPUcycles += 6;
-    break;
-    case TXA:
-        result = registers.Xregister;
-        registers.accumulator = registers.Xregister;
-        PPUcycles += 6;
-    break;
-    case TXS:
-        registers.stackPointer = registers.Xregister;
-        PPUcycles += 6;
-    break;
-    case TYA:
-        result = registers.Yregister;
-        registers.accumulator = registers.Yregister;
-        PPUcycles += 6;
-    break;
-    case CLC:
-    case CLD:
-    case CLI:
-    case CLV:
-    case NOP:
-    case SEC:
-    case SED:
-    case SEI:
-        PPUcycles+=6;
+    //printOpcode(opcode);
+    switch(opcode)
+    {
+    case 0x00: return break6502();
+    case 0x01: return or6502(GetOperandValue(INDIRECT_X_INDEX).first);
+    case 0x05: return or6502(GetOperandValue(ZEROPAGE).first);
+    case 0x06: return shift6502(true, false, false, GetOperandValue(ZEROPAGE));
+    case 0x08: PPUcycles+=9; return PushStack8Bit(registers.processorStatus);
+    case 0x09: return or6502(GetOperandValue(IMMEDIATE).first);
+    case 0x0A: return shift6502(true, false, true, GetOperandValue(ACCUMULATOR));
+    case 0x0D: return or6502(GetOperandValue(ABSOLUTE).first);
+    case 0x0E: return shift6502(true, false, false, GetOperandValue(ABSOLUTE));
+    case 0x10: return branch6502(NEGATIVE, false, Read8Bit(registers.programCounter, true));
+    case 0x11: return or6502(GetOperandValue(INDIRECT_Y_INDEX).first);
+    case 0x15: return or6502(GetOperandValue(ZEROPAGE_X_INDEX).first);
+    case 0x16: return shift6502(true, false, false, GetOperandValue(ZEROPAGE_X_INDEX));
+    case 0x18: PPUcycles+=6; return SetProcessorStatusFlag(CARRY, false); 
+    case 0x19: return or6502(GetOperandValue(ABSOLUTE_Y_INDEX).first);
+    case 0x1D: return or6502(GetOperandValue(ABSOLUTE_X_INDEX).first);
+    case 0x1E: return shift6502(true, false, false, GetOperandValue(ABSOLUTE_X_INDEX));
+    case 0x20: return jsr6502();
+    case 0x21: return and6502(GetOperandValue(INDIRECT_X_INDEX).first);
+    case 0x24: return bit6502(GetOperandValue(ZEROPAGE).first);
+    case 0x25: return and6502(GetOperandValue(ZEROPAGE).first);
+    case 0x26: return shift6502(true, true, false, GetOperandValue(ZEROPAGE));
+    case 0x28: PPUcycles+=12; registers.processorStatus = PullStack8Bit(); return;
+    case 0x29: return and6502(GetOperandValue(IMMEDIATE).first);
+    case 0x2A: return shift6502(true, true, true, GetOperandValue(ACCUMULATOR));
+    case 0x2C: return bit6502(GetOperandValue(ABSOLUTE).first);
+    case 0x2D: return and6502(GetOperandValue(ABSOLUTE).first);
+    case 0x2E: return shift6502(true, true, false, GetOperandValue(ABSOLUTE));
+    case 0x30: return branch6502(NEGATIVE, true, Read8Bit(registers.programCounter, true));
+    case 0x31: return and6502(GetOperandValue(INDIRECT_Y_INDEX).first);
+    case 0x35: return and6502(GetOperandValue(ZEROPAGE_X_INDEX).first);
+    case 0x36: return shift6502(true, true, false, GetOperandValue(ZEROPAGE_X_INDEX));
+    case 0x38: PPUcycles+=6; return SetProcessorStatusFlag(CARRY, true); 
+    case 0x39: return and6502(GetOperandValue(ABSOLUTE_Y_INDEX).first);
+    case 0x3D: return and6502(GetOperandValue(ABSOLUTE_X_INDEX).first);
+    case 0x3E: return shift6502(true, true, false, GetOperandValue(ABSOLUTE_X_INDEX));
+    case 0x40: return rti6502();
+    case 0x41: return eor6502(GetOperandValue(INDIRECT_X_INDEX).first);
+    case 0x45: return eor6502(GetOperandValue(ZEROPAGE).first);
+    case 0x46: return shift6502(false, false, false, GetOperandValue(ZEROPAGE));
+    case 0x48: PPUcycles+=9; return PushStack8Bit(registers.accumulator); 
+    case 0x49: return eor6502(GetOperandValue(IMMEDIATE).first);
+    case 0x4A: return shift6502(false, false, true, GetOperandValue(ACCUMULATOR));
+    case 0x4C: PPUcycles+=9; registers.programCounter = GetOperandValue(ABSOLUTE).second; return; 
+    case 0x4D: return eor6502(GetOperandValue(ABSOLUTE).first);
+    case 0x4E: return shift6502(false, false, false, GetOperandValue(ABSOLUTE));
+    case 0x50: return branch6502(OVERFLOW, false, Read8Bit(registers.programCounter, true));
+    case 0x51: return eor6502(GetOperandValue(INDIRECT_Y_INDEX).first);
+    case 0x55: return eor6502(GetOperandValue(ZEROPAGE_X_INDEX).first);
+    case 0x56: return shift6502(false, false, false, GetOperandValue(ZEROPAGE_X_INDEX));
+    case 0x58: PPUcycles+=6; return SetProcessorStatusFlag(INTERRUPT_DISABLE, false);  
+    case 0x59: return eor6502(GetOperandValue(ABSOLUTE_Y_INDEX).first);
+    case 0x5D: return eor6502(GetOperandValue(ABSOLUTE_X_INDEX).first);
+    case 0x5E: return shift6502(false, false, false, GetOperandValue(ABSOLUTE_X_INDEX));
+    case 0x60: PPUcycles+=18; registers.programCounter=PullStack16Bit()+1; return; 
+    case 0x61: return add6502(GetOperandValue(INDIRECT_X_INDEX).first);
+    case 0x65: return add6502(GetOperandValue(ZEROPAGE).first);
+    case 0x66: return shift6502(false, true, false, GetOperandValue(ZEROPAGE));
+    case 0x68: PPUcycles+=12; registers.accumulator = PullStack8Bit(); return; 
+    case 0x69: return add6502(GetOperandValue(IMMEDIATE).first);
+    case 0x6A: return shift6502(false, true, true, GetOperandValue(ACCUMULATOR));
+    case 0x6C: PPUcycles+=9; registers.programCounter = GetOperandValue(INDIRECT).first; return;  
+    case 0x6D: return add6502(GetOperandValue(ABSOLUTE).first);
+    case 0x6E: return shift6502(false, true, false, GetOperandValue(ABSOLUTE));
+    case 0x70: return branch6502(OVERFLOW, true, Read8Bit(registers.programCounter, true));
+    case 0x71: return add6502(GetOperandValue(INDIRECT_Y_INDEX).first);
+    case 0x75: return add6502(GetOperandValue(ZEROPAGE_X_INDEX).first);
+    case 0x76: return shift6502(false, true, false, GetOperandValue(ZEROPAGE_X_INDEX));
+    case 0x78: PPUcycles+=6; return SetProcessorStatusFlag(INTERRUPT_DISABLE, true);   
+    case 0x79: return add6502(GetOperandValue(ABSOLUTE_Y_INDEX).first);
+    case 0x7D: return add6502(GetOperandValue(ABSOLUTE_X_INDEX).first);
+    case 0x7E: return shift6502(false, true, false, GetOperandValue(ABSOLUTE_X_INDEX));
+    case 0x81: return store6502(GetOperandValue(INDIRECT_X_INDEX).second, registers.accumulator);
+    case 0x84: return store6502(GetOperandValue(ZEROPAGE).second, registers.Yregister); 
+    case 0x85: return store6502(GetOperandValue(ZEROPAGE).second, registers.accumulator); 
+    case 0x86: return store6502(GetOperandValue(ZEROPAGE).second, registers.Xregister); 
+    case 0x88: return inc6502(registers.Yregister, true); 
+    case 0x8A: return transfer6502(registers.Xregister, registers.accumulator,true);
+    case 0x8C: return store6502(GetOperandValue(ABSOLUTE).second, registers.Yregister); 
+    case 0x8D: return store6502(GetOperandValue(ABSOLUTE).second, registers.accumulator); 
+    case 0x8E: return store6502(GetOperandValue(ABSOLUTE).second, registers.Xregister); 
+    case 0x90: return branch6502(CARRY, false, Read8Bit(registers.programCounter, true));
+    case 0x91: return store6502(GetOperandValue(INDIRECT_Y_INDEX).second, registers.accumulator);  
+    case 0x94: return store6502(GetOperandValue(ZEROPAGE_X_INDEX).second, registers.Yregister); 
+    case 0x95: return store6502(GetOperandValue(ZEROPAGE_X_INDEX).second, registers.accumulator);
+    case 0x96: return store6502(GetOperandValue(ZEROPAGE_Y_INDEX).second, registers.Xregister); 
+    case 0x98: return transfer6502(registers.Yregister, registers.accumulator,true);
+    case 0x99: return store6502(GetOperandValue(ABSOLUTE_Y_INDEX).second, registers.accumulator); 
+    case 0x9A: return transfer6502(registers.Xregister, registers.stackPointer, false);
+    case 0x9D: return store6502(GetOperandValue(ABSOLUTE_X_INDEX).second, registers.accumulator);  
+    case 0xA0: return load6502(GetOperandValue(IMMEDIATE).first, registers.Yregister);
+    case 0xA1: return load6502(GetOperandValue(INDIRECT_X_INDEX).first, registers.accumulator);
+    case 0xA2: return load6502(GetOperandValue(IMMEDIATE).first, registers.Xregister);
+    case 0xA4: return load6502(GetOperandValue(ZEROPAGE).first, registers.Yregister);
+    case 0xA5: return load6502(GetOperandValue(ZEROPAGE).first, registers.accumulator);
+    case 0xA6: return load6502(GetOperandValue(ZEROPAGE).first, registers.Xregister);
+    case 0xA8: return transfer6502(registers.accumulator, registers.Yregister,true);
+    case 0xA9: return load6502(GetOperandValue(IMMEDIATE).first, registers.accumulator);
+    case 0xAA: return transfer6502(registers.accumulator, registers.Xregister,true);
+    case 0xAC: return load6502(GetOperandValue(ABSOLUTE).first, registers.Yregister);
+    case 0xAD: return load6502(GetOperandValue(ABSOLUTE).first, registers.accumulator);
+    case 0xAE: return load6502(GetOperandValue(ABSOLUTE).first, registers.Xregister);
+    case 0xB0: return branch6502(CARRY, true, Read8Bit(registers.programCounter, true));
+    case 0xB1: return load6502(GetOperandValue(INDIRECT_Y_INDEX).first, registers.accumulator);
+    case 0xB4: return load6502(GetOperandValue(ZEROPAGE_X_INDEX).first, registers.Yregister);
+    case 0xB5: return load6502(GetOperandValue(ZEROPAGE_X_INDEX).first, registers.accumulator);
+    case 0xB6: return load6502(GetOperandValue(ZEROPAGE_Y_INDEX).first, registers.Xregister);
+    case 0xB8: PPUcycles+=6; return SetProcessorStatusFlag(OVERFLOW, false);  
+    case 0xB9: return load6502(GetOperandValue(ABSOLUTE_Y_INDEX).first, registers.accumulator);
+    case 0xBA: return transfer6502(registers.stackPointer, registers.Xregister,true);
+    case 0xBC: return load6502(GetOperandValue(ABSOLUTE_X_INDEX).first, registers.Yregister);
+    case 0xBD: return load6502(GetOperandValue(ABSOLUTE_X_INDEX).first, registers.accumulator);
+    case 0xBE: return load6502(GetOperandValue(ABSOLUTE_Y_INDEX).first, registers.Xregister);
+    case 0xC0: return compare6502(registers.Yregister, GetOperandValue(IMMEDIATE).first);
+    case 0xC1: return compare6502(registers.accumulator, GetOperandValue(INDIRECT_X_INDEX).first);
+    case 0xC4: return compare6502(registers.Yregister, GetOperandValue(ZEROPAGE).first);
+    case 0xC5: return compare6502(registers.accumulator, GetOperandValue(ZEROPAGE).first);
+    case 0xC6: return incMem6502(GetOperandValue(ZEROPAGE), true);
+    case 0xC8: return inc6502(registers.Yregister, false);
+    case 0xC9: return compare6502(registers.accumulator, GetOperandValue(IMMEDIATE).first);
+    case 0xCA: return inc6502(registers.Xregister, true);
+    case 0xCC: return compare6502(registers.Yregister, GetOperandValue(ABSOLUTE).first);
+    case 0xCD: return compare6502(registers.accumulator, GetOperandValue(ABSOLUTE).first);
+    case 0xCE: return incMem6502(GetOperandValue(ABSOLUTE), true);
+    case 0xD0: return branch6502(ZERO, false, Read8Bit(registers.programCounter, true));
+    case 0xD1: return compare6502(registers.accumulator, GetOperandValue(INDIRECT_Y_INDEX).first);
+    case 0xD5: return compare6502(registers.accumulator, GetOperandValue(ZEROPAGE_X_INDEX).first);
+    case 0xD6: return incMem6502(GetOperandValue(ZEROPAGE_X_INDEX), true);
+    case 0xD8: PPUcycles+=6; return SetProcessorStatusFlag(DECIMAL, false);
+    case 0xD9: return compare6502(registers.accumulator, GetOperandValue(ABSOLUTE_Y_INDEX).first);
+    case 0xDD: return compare6502(registers.accumulator, GetOperandValue(ABSOLUTE_X_INDEX).first);
+    case 0xDE: return incMem6502(GetOperandValue(ABSOLUTE_X_INDEX), true);
+    case 0xE0: return compare6502(registers.Xregister, GetOperandValue(IMMEDIATE).first);
+    case 0xE1: return subtract6502(GetOperandValue(INDIRECT_X_INDEX).first);
+    case 0xE4: return compare6502(registers.Xregister, GetOperandValue(ZEROPAGE).first);
+    case 0xE5: return subtract6502(GetOperandValue(ZEROPAGE).first);
+    case 0xE6: return incMem6502(GetOperandValue(ZEROPAGE), false);
+    case 0xE8: return inc6502(registers.Xregister, false);
+    case 0xE9: return subtract6502(GetOperandValue(IMMEDIATE).first);
+    case 0xEA: PPUcycles+=6; return; 
+    case 0xEC: return compare6502(registers.Xregister, GetOperandValue(ABSOLUTE).first);
+    case 0xED: return subtract6502(GetOperandValue(ABSOLUTE).first);
+    case 0xEE: return incMem6502(GetOperandValue(ABSOLUTE), false);
+    case 0xF0: return branch6502(ZERO, true, Read8Bit(registers.programCounter, true));
+    case 0xF1: return subtract6502(GetOperandValue(INDIRECT_Y_INDEX).first);
+    case 0xF5: return subtract6502(GetOperandValue(ZEROPAGE_X_INDEX).first);
+    case 0xF6: return incMem6502(GetOperandValue(ZEROPAGE_X_INDEX), false);
+    case 0xF8: PPUcycles+=6; return SetProcessorStatusFlag(DECIMAL, true); 
+    case 0xF9: return subtract6502(GetOperandValue(ABSOLUTE_Y_INDEX).first);
+    case 0xFD: return subtract6502(GetOperandValue(ABSOLUTE_X_INDEX).first);
+    case 0xFE: return incMem6502(GetOperandValue(ABSOLUTE_X_INDEX), false);
+    default: 
+        cerr << "invalid opcode " << std::setfill('0') << std::setw(2) << std::hex << opcode << "\n";
+        exit(7);
     }
-    UpdateProcessorStatus(result, signedResult, instruction);
 }
 
 void NES::Run()
@@ -936,17 +661,9 @@ void NES::Run()
     while(true)
     {
         uint8_t opcode = Read8Bit(registers.programCounter, true);
-        Instruction instruction=Instruction::INVALID_INSTRUCTION;
-        AddressMode addressMode=AddressMode::INVALID_ADDRESS_MODE;
-        ParseOpcode(opcode, instruction, addressMode);
-        //cout << debugInstructionToString[instruction] << " " << debugAddressModeToString[addressMode] << '\n';
-        if(instruction==Instruction::INVALID_INSTRUCTION || addressMode == AddressMode::INVALID_ADDRESS_MODE)
-        {
-            cerr << "Invalid opcode " << std::hex << (int)opcode <<"\n";
-            exit(7);
-        }
 
-        Execute(instruction, addressMode);
+        ExecuteStep(opcode);
+
         if(PPUcycles > PPUcyclesPerLine)
         {
             PPUcycles -= PPUcyclesPerLine;
@@ -974,28 +691,6 @@ void NES::Run()
                 // TODO show frame then sleep until we hit msPerFrame
                 SDL_BlitScaled(nesSurface, NULL, windowSurface, &stretchRect);
                 SDL_UpdateWindowSurface(win);
-                
-                cout << ++frameCount << '\n';
-                /*frameCount++;
-                std::cout << "\n";
-                std::cout << "\n";
-
-                std::cout << "\n";
-                if(frameCount>3)
-                {
-                    for(int i=0; i<30; i++)
-                    {
-                        for(int j=0; j<32;j++)
-                        {
-                            //cout << setfill('0') << setw(2) << std::hex << ((int)PPUmemory[0x2000 + j + i * 32] & 0xFF) << " ";
-                        }
-                        //cout << "\n";
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(50000));
-                    exit(0);
-                }
-                //std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                */
             }
         }
 

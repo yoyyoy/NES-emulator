@@ -117,18 +117,11 @@ private:
         NEGATIVE=7
     };
 
-
-
     void ParseHeader(std::ifstream &romFile);
     void InitMemory(std::ifstream &romFile);
     void InitSDL();
 
-    void Execute(Instruction instruction, AddressMode addressMode);
-
-    //helper functions for opcode parsing
-    Instruction Low159D(uint8_t upper);
-    Instruction Low6E(uint8_t upper);
-    void ParseOpcode(uint8_t opcode, Instruction &instruction, AddressMode &addressMode);
+    void ExecuteStep(uint8_t opcode);
 
     uint16_t Read16Bit(uint16_t address, bool incrementPC);
     uint8_t Read8Bit(uint16_t address, bool incrementPC);
@@ -141,9 +134,10 @@ private:
     uint16_t PullStack16Bit();
     uint8_t PullStack8Bit();
 
-    uint16_t GetOperandValue(AddressMode addressMode, uint16_t &address);
-    void UpdateProcessorStatus(uint16_t result, int32_t signedResult, Instruction instruction);
-    void SetProcessorStatusBit(int bitNum, bool set);
+    std::pair<uint16_t, uint16_t> GetOperandValue(AddressMode addressMode);
+    void UpdateZeroAndNegativeFlags(uint16_t result);
+    void SetProcessorStatusFlag(int bitNum, bool set);
+    uint8_t GetProcessorStatusFlag(int bitNum);
 
     uint8_t PPUGet2002();
     void PPUWrite(uint8_t value);
@@ -154,6 +148,24 @@ private:
     uint8_t GetPaletteIndex(uint8_t patternIndex);
     uint8_t GetColor(uint8_t nametable, uint8_t x, uint8_t y, uint8_t paletteIndex);
     void UpdateSprites();
+
+    void add6502(uint8_t value);
+    void subtract6502(uint8_t value);
+    void and6502(uint8_t value);
+    void or6502(uint8_t value);
+    void eor6502(uint8_t value);
+    void bit6502(uint8_t value);
+    void shift6502(bool left, bool rotate, bool acc, std::pair<uint16_t, uint16_t> valueAddress);
+    void compare6502(uint8_t value, uint8_t value2);
+    void branch6502(StatusFlags flag, bool set, int8_t value);
+    void break6502();
+    void jsr6502();
+    void rti6502();
+    void store6502(uint16_t address, uint8_t value);
+    void load6502(uint8_t value, uint8_t &dest);
+    void transfer6502(uint8_t source, uint8_t& destination, bool updateFlags);
+    void inc6502(uint8_t& value, bool dec);
+    void incMem6502(std::pair<uint16_t, uint16_t> valueAddress, bool dec);
 
     char nesMemory[0x10000];
     char PPUmemory[0x4000];
