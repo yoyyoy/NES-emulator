@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/debug/program",
             "args": [
-                "-p=/home/yoy/Downloads/Donkey Kong (USA) (GameCube Edition).nes"
+                "-p=/home/yoy/Downloads/Super Mario Bros. (Japan, USA).nes"
             ],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "Build Debug" // Links to the debug build task

@@ -74,6 +74,7 @@ private:
         uint16_t VRAMaddress;
         bool firstRead=true;
         MirrorType nameTableMirror;
+        uint8_t dataReadBuffer=0;
     } PPUstatus;
 
     struct SpriteData
@@ -133,20 +134,26 @@ private:
 
     uint16_t PullStack16Bit();
     uint8_t PullStack8Bit();
-
-    std::pair<uint16_t, uint16_t> GetOperandValue(AddressMode addressMode);
+    
+    uint16_t GetOperandAddress(AddressMode addressMode);
+    std::pair<uint16_t, uint16_t> GetOperandAddressValue(AddressMode addressMode);
     void UpdateZeroAndNegativeFlags(uint16_t result);
     void SetProcessorStatusFlag(int bitNum, bool set);
     uint8_t GetProcessorStatusFlag(int bitNum);
 
+    uint8_t PPUHandleRegRead(uint8_t reg);
     uint8_t PPUGet2002();
+    uint8_t PPUReadMemory();
     void PPUWrite(uint8_t value);
     void PPURenderLine();
     void PPUHandleRegisterWrite(uint8_t reg, uint8_t value);
-    void CalcNameTableCoords(uint8_t& nameTable, uint8_t& x, uint8_t& y, uint8_t currentPixel);
-    uint8_t PPUGetNameTableByte(int nametable, int x, int y);
-    uint8_t GetPaletteIndex(uint8_t patternIndex);
-    uint8_t GetColor(uint8_t nametable, uint8_t x, uint8_t y, uint8_t paletteIndex);
+    void CalcNameTableCoords(uint8_t& nameTable, uint8_t& x, uint8_t& y);
+    void PPUGetNameTableBytes(int nametable, int x, int y, char *outBytes);
+    void PPUGetAttributeTableBytes(int nametable, int x, int y, char *outBytes);
+    uint8_t GetRealNameTable(uint8_t nametable);
+    uint8_t GetBackgroundColor(uint8_t attributeByte, uint8_t x, uint8_t y, uint8_t paletteIndex);
+    uint8_t GetBackDropColor();
+    uint8_t GetSpriteColor(uint8_t attributeByte, uint8_t paletteIndex);
     void UpdateSprites();
 
     void add6502(uint8_t value);
@@ -166,6 +173,12 @@ private:
     void transfer6502(uint8_t source, uint8_t& destination, bool updateFlags);
     void inc6502(uint8_t& value, bool dec);
     void incMem6502(std::pair<uint16_t, uint16_t> valueAddress, bool dec);
+
+    void DebugRenderFrame(bool fullFrame);
+    void DebugPrint();
+    void DebugShowMemory(std::string page);
+    void DebugPrintTables();
+    void DebugPrintAttribute();
 
     char nesMemory[0x10000];
     char PPUmemory[0x4000];

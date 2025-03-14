@@ -16,16 +16,8 @@ uint8_t NES::Read8Bit(uint16_t address, bool incrementPC)
     if(address < 0x2000) return nesMemory[address % 0x0800];
     
     //mirrored PPU registers
-    if(address < 0x4000)
-    {
-        if(address%8!=2)
-            return nesMemory[(address % 8) + 0x2000];
-        else
-        {
-            //TODO remember to reset firstRead variable anytime this address is read
-            return PPUGet2002();
-        }
-    } 
+    if(address < 0x4000) return PPUHandleRegRead(address%8);
+    
         
 
     //IO registers
@@ -48,7 +40,7 @@ void NES::Write8Bit(uint16_t address, uint8_t value)
 {
     if(address < 0x2000) 
         nesMemory[address%0x0800] = value;
-    else if(address < 0x4000 || address == 0x4014)
+    else if(address < 0x4000)
     {
         
         address%=8;
