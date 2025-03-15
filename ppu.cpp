@@ -5,9 +5,9 @@ uint8_t NES::PPUGet2002()
 {
     PPUstatus.firstRead=true;
     uint8_t output=0;
-    if(PPUstatus.spriteOverflow) output |= 0b100000;
-    if(PPUstatus.hitSprite0) output |= 0b1000000;
-    if(PPUstatus.VBlanking) output |= 0b10000000;
+    if(PPUstatus.spriteOverflow)    output |= 0b100000;
+    if(PPUstatus.hitSprite0)        output |= 0b1000000;
+    if(PPUstatus.VBlanking)         output |= 0b10000000;
     PPUstatus.VBlanking =false;
     return output;
 }
@@ -31,16 +31,23 @@ uint8_t NES::PPUHandleRegRead(uint8_t reg)
 
 uint8_t NES::PPUReadMemory()
 {
-    uint16_t oldVRAMAddress = PPUstatus.VRAMaddress;
+    uint8_t value = PPUstatus.dataReadBuffer;
+
+    if ((PPUstatus.VRAMaddress & 0x3FFF) > 0x3F00)
+    {
+        if (PPUstatus.incrementBy32) PPUstatus.VRAMaddress += 32;
+        else PPUstatus.VRAMaddress++;
+        return PPUmemory[PPUstatus.VRAMaddress & 0x3FFF];
+    }
+
+
+    if ((PPUstatus.VRAMaddress & 0x3FFF) < 0x2000)
+        PPUstatus.dataReadBuffer = VROMbanks[activeVROMBank].at(PPUstatus.VRAMaddress & 0x3FFF);
+    else
+        PPUstatus.dataReadBuffer = PPUmemory[PPUstatus.VRAMaddress & 0x3FFF];
+
     if (PPUstatus.incrementBy32) PPUstatus.VRAMaddress += 32;
     else PPUstatus.VRAMaddress++;
-
-    if ((oldVRAMAddress & 0x3FFF) > 0x3F00)
-        return PPUmemory[oldVRAMAddress & 0x3FFF];
-
-    uint8_t value = PPUstatus.dataReadBuffer;
-    PPUstatus.dataReadBuffer = PPUmemory[oldVRAMAddress];
-
     return value;
 }
 
@@ -73,6 +80,18 @@ void NES::DebugPrintTables()
         for (int j = 0; j < 32; j++)
         {
             std::cout << std::setfill('0') << std::setw(2) << std::hex << ((uint16_t)PPUmemory[0x2400 + j + i * 32] & 0xFF) << " ";
+        }
+        std::cout << '\n';
+    }
+}
+
+void NES::DebugPrintOAM()
+{
+    for (int i = 0; i < 16; i++)
+    {
+        for (int j = 0; j < 16; j++)
+        {
+            std::cout << std::setfill('0') << std::setw(2) << std::hex << ((uint16_t)(PPUOAM[j + i * 16]) & 0xFF) << " ";
         }
         std::cout << '\n';
     }
@@ -114,40 +133,57 @@ void NES::PPURenderLine()
         {
             scanlinePixels[i] = *((Uint32 *)&color);
         }
+        return;
     }
 
     UpdateSprites();
     
-    char nametableBytes[32];
-    char attributeTableBytes[8];
+    char nametableBytes[33];
+    char attributeTableBytes[9];
 
     uint8_t nametable, nametableX, nametableY;
     CalcNameTableCoords(nametable, nametableX, nametableY);
     PPUGetNameTableBytes(nametable, nametableX, nametableY, nametableBytes);
     PPUGetAttributeTableBytes(nametable, nametableX, nametableY, attributeTableBytes);
     uint8_t yOffset = (scanline + PPUstatus.Yscroll) % 8;
+    uint8_t nametableXOffset = PPUstatus.Xscroll %8;
+    uint8_t attributeTableXOffset = nametableX % 4;
     bool opaqueBackground[256] = { false };
-    for(int i=0; i<32; i++)
+
+    if(PPUstatus.displayBackground)
     {
-        if ((PPUstatus.showLeft8PixelsBackground || i >= 1) && PPUstatus.displayBackground)
+        for (int i = 0; i < (nametableXOffset == 0 ? 32 : 33); i++)
         {
             uint8_t patternIndex = nametableBytes[i];
             uint8_t firstByte = VROMbanks[activeVROMBank].at(patternIndex * 16 + yOffset + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
             uint8_t secondByte = VROMbanks[activeVROMBank].at(patternIndex * 16 + yOffset + 8 + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
-            
-            for(int j=0; j<8; j++)
+
+            for (int j = 0; j < 8; j++)
             {
                 uint8_t paletteIndex = 0;
-                if (firstByte & (1 << 7-j)) paletteIndex += 1;
-                if (secondByte & (1 << 7-j)) paletteIndex += 2;
-                
-                if(paletteIndex) opaqueBackground[i*8+j] = true;
+                if (firstByte & (1 << 7 - j))
+                    paletteIndex += 1;
+                if (secondByte & (1 << 7 - j))
+                    paletteIndex += 2;
 
-                uint8_t nesColor = GetBackgroundColor(attributeTableBytes[i/4], nametableX, nametableY, paletteIndex);
-                RGB color = nesPalette[nesColor];
-                scanlinePixels[i*8+j] = *((Uint32 *)&color);
+                int pixelPos = i * 8 + j - nametableXOffset;
+                if (pixelPos >=0 && pixelPos < 8 && !PPUstatus.showLeft8PixelsBackground)
+                {
+                    RGB color = nesPalette[GetBackDropColor()];
+                    scanlinePixels[pixelPos] = *((Uint32 *)&color);
+                }
+                else if (pixelPos >= 0 && pixelPos < 256)
+                {
+                    if (paletteIndex)
+                        opaqueBackground[i * 8 + j] = true;
+                    uint8_t nesColor = GetBackgroundColor(attributeTableBytes[(i+attributeTableXOffset)/4], nametableX, nametableY, paletteIndex);
+                    RGB color = nesPalette[nesColor];
+                    scanlinePixels[pixelPos] = *((Uint32 *)&color);
+                }
+
+
             }
-            
+
             nametableX++;
             if (nametableX >= 32)
             {
@@ -158,15 +194,16 @@ void NES::PPURenderLine()
                     nametable = GetRealNameTable(nametable + 1);
             }
         }
-        else
+    }
+    else
+    {
+        RGB color = nesPalette[PPUmemory[0x3F00]];
+        for (int i = 0; i < 256; i++)
         {
-            RGB color = nesPalette[PPUmemory[0x3F00]];
-            for(int j=0; j<8; j++)
-            {
-                scanlinePixels[i*8+j] = *((Uint32 *)&color);
-            }
+            scanlinePixels[i] = *((Uint32 *)&color);
         }
     }
+
 
     if (!PPUstatus.displaySprites || (scanline - (header.isPAL ? 0 : 8)) == 0)
         return;
@@ -174,7 +211,7 @@ void NES::PPURenderLine()
     for(int j = spritesOnScanLine.size()-1; j>=0; j--)
     {
         auto sprite = spritesOnScanLine[j];
-        int yPos = (scanline + PPUstatus.Yscroll) - sprite.yPos;
+        int yPos = (scanline) - sprite.yPos;
 
         //sanity check
         if (yPos < 0 || yPos >= (PPUstatus.is8x16Sprites ? 16 : 8))
@@ -182,7 +219,9 @@ void NES::PPURenderLine()
             std::cerr << "sprite position out of bounds\n";
             exit(15);
         }
-
+        if(sprite.attributes & 0b10000000)
+            yPos = (PPUstatus.is8x16Sprites ? 15 : 7) - yPos;
+            
         uint8_t firstByte;
         uint8_t secondByte;
         
@@ -210,7 +249,7 @@ void NES::PPURenderLine()
             uint8_t paletteIndex = 0;
             if (firstByte & (1 << 7-i)) paletteIndex += 1;
             if (secondByte & (1 << 7-i)) paletteIndex += 2;
-            int pixelPos = (sprite.xPos - PPUstatus.Xscroll) + (sprite.attributes & 0b1000000 ? 7-i : i);
+            int pixelPos = (sprite.xPos) + (sprite.attributes & 0b1000000 ? 7-i : i);
             
             if(pixelPos<8 && !PPUstatus.showLeft8PixelsSprites)
                 continue;
@@ -218,9 +257,14 @@ void NES::PPURenderLine()
             if (pixelPos >= 0 && pixelPos<256)
             {
                 if(paletteIndex && opaqueBackground[pixelPos] && sprite.id==0)
+                {
+                    //std::cout << "hit sprite 0 at x=" << pixelPos<< ", y=" << scanline << "\n";
                     PPUstatus.hitSprite0=true;
-
-                if((!(sprite.attributes & 0b100000) || !opaqueBackground[pixelPos]) && paletteIndex!=0)
+                    //RGB color = nesPalette[0x2A];
+                    //scanlinePixels[pixelPos] = *((Uint32 *)&color);
+                }
+                
+                if(((!(sprite.attributes & 0b100000)) || (!opaqueBackground[pixelPos])) && paletteIndex!=0)
                 {
                     uint8_t nesColor = GetSpriteColor(sprite.attributes, paletteIndex);
                     RGB color = nesPalette[nesColor];
@@ -230,7 +274,6 @@ void NES::PPURenderLine()
             }
         }
     }
-    
 }
 
 uint8_t NES::GetBackDropColor()
@@ -281,42 +324,44 @@ uint8_t NES::GetRealNameTable(uint8_t nametable)
     }
 }
 
-void NES::PPUGetNameTableBytes(int nametable, int x, int y, char* outBytes)
+void NES::PPUGetNameTableBytes(uint8_t nametable, uint8_t x, uint8_t y, char *outBytes)
 {
     nametable=GetRealNameTable(nametable);
     
     uint16_t desired = 0x2000 + ((nametable << 10) + x + (y*32));
-    memcpy(outBytes, PPUmemory + desired, 32 - x);
-    if (x != 0)
-    {
-        if (nametable & 1)
-            nametable = GetRealNameTable(nametable-1);
-        else
-            nametable = GetRealNameTable(nametable+1);
-        desired = 0x2000 + ((nametable << 10) + (y * 32));
-        memcpy(outBytes + 32 - x, PPUmemory + desired, x);
-    }
+    for(int i=0; i<32-x; i++)
+        outBytes[i]=PPUmemory[desired+i];
+
+    if (nametable & 1) nametable = GetRealNameTable(nametable-1);
+    else nametable = GetRealNameTable(nametable+1);
+    
+    desired = 0x2000 + ((nametable << 10) + (y * 32));
+    for (int i = 32-x; i < 33; i++)
+        outBytes[i] = PPUmemory[desired + (i - (32-x))];
 }
 
-void NES::PPUGetAttributeTableBytes(int nametable, int x, int y, char *outBytes)
+void NES::PPUGetAttributeTableBytes(uint8_t nametable, uint8_t x, uint8_t y, char *outBytes)
 {
     nametable = GetRealNameTable(nametable);
 
-    uint16_t desired = 0x23C0 + (nametable << 10) + (x / 4) + ((y / 4) * 8);
-    memcpy(outBytes, PPUmemory + desired, 8 - x);
-    if (x != 0)
-    {
-        if (nametable & 1)
-            nametable = GetRealNameTable(nametable - 1);
-        else
-            nametable = GetRealNameTable(nametable + 1);
-        desired = 0x23C0 + (nametable << 10) + ((y / 4) * 8);
-        memcpy(outBytes + 8 - x, PPUmemory + desired, x);
-    }
+    uint16_t desired = 0x23C0 + (nametable << 10) + (x/4)+ ((y / 4) * 8);
+    for (int i = 0; i < 8 - (x/4); i++)
+        outBytes[i] = PPUmemory[desired + i];
+
+    if (nametable & 1)
+        nametable = GetRealNameTable(nametable - 1);
+    else
+        nametable = GetRealNameTable(nametable + 1);
+
+    desired = 0x23C0 + (nametable << 10) + ((y / 4) * 8);
+    for (int i = 8 - (x/4); i < 9; i++)
+        outBytes[i] = PPUmemory[desired + (i - (8 - (x/4)))];
+    
 }
 
 uint8_t NES::GetBackgroundColor(uint8_t attributeByte, uint8_t x, uint8_t y, uint8_t paletteIndex)
 {
+    if(paletteIndex==0) return PPUmemory[0x3F00];
     uint8_t mask = 0b11;
     uint8_t maskShift=0;
     if(x%4>=2)
@@ -343,8 +388,8 @@ void NES::UpdateSprites()
     for(int i=0; i<64; i++)
     {
         uint32_t* sprite = ((uint32_t*)PPUOAM)+i;
-        int yPos = *((uint8_t*)sprite) + 1;
-        int yRange = (scanline + PPUstatus.Yscroll) -yPos;
+        int yPos = ((int)*((uint8_t*)sprite))+1;
+        int yRange = (scanline) - yPos;
         if (yRange>=0 && yRange < (PPUstatus.is8x16Sprites ? 16 : 8))
         {
             if(spritesOnScanLine.size()>=8)
@@ -402,9 +447,14 @@ void NES::PPUHandleRegisterWrite(uint8_t reg, uint8_t value)
         break;
     case 6:
         if (PPUstatus.firstRead)
-            PPUstatus.VRAMaddress = (PPUstatus.VRAMaddress & 0x00FF) | ((uint16_t)value << 8);
+        {
+            if(value == 0x1e)
+                std::cout << "probably title screen\n";
+            PPUstatus.currentNameTable = (value & 0b1100) >> 2;
+            PPUstatus.tempAddress = value;
+        }
         else
-            PPUstatus.VRAMaddress = (PPUstatus.VRAMaddress & 0xFF00) | value;
+            PPUstatus.VRAMaddress = (((uint16_t)PPUstatus.tempAddress) << 8) | value;
         PPUstatus.firstRead = !PPUstatus.firstRead;
         break;
     case 7:

@@ -75,11 +75,12 @@ private:
         bool firstRead=true;
         MirrorType nameTableMirror;
         uint8_t dataReadBuffer=0;
+        uint8_t tempAddress;
     } PPUstatus;
 
     struct SpriteData
     {
-        uint8_t yPos;
+        uint16_t yPos;
         uint8_t tileNumber;
         uint8_t attributes;
         uint8_t xPos;
@@ -118,6 +119,18 @@ private:
         NEGATIVE=7
     };
 
+    struct ControllerData
+    {
+        bool A=false;
+        bool B = false;
+        bool select = false;
+        bool start = false;
+        bool up = false;
+        bool down = false;
+        bool left = false;
+        bool right = false;
+    };
+
     void ParseHeader(std::ifstream &romFile);
     void InitMemory(std::ifstream &romFile);
     void InitSDL();
@@ -125,6 +138,7 @@ private:
     void ExecuteStep(uint8_t opcode);
 
     uint16_t Read16Bit(uint16_t address, bool incrementPC);
+    uint16_t Read16BitWrapAround(uint16_t address);
     uint8_t Read8Bit(uint16_t address, bool incrementPC);
 
     void Write8Bit(uint16_t address, uint8_t value);
@@ -148,8 +162,8 @@ private:
     void PPURenderLine();
     void PPUHandleRegisterWrite(uint8_t reg, uint8_t value);
     void CalcNameTableCoords(uint8_t& nameTable, uint8_t& x, uint8_t& y);
-    void PPUGetNameTableBytes(int nametable, int x, int y, char *outBytes);
-    void PPUGetAttributeTableBytes(int nametable, int x, int y, char *outBytes);
+    void PPUGetNameTableBytes(uint8_t nametable, uint8_t x, uint8_t y, char *outBytes);
+    void PPUGetAttributeTableBytes(uint8_t nametable, uint8_t x, uint8_t y, char *outBytes);
     uint8_t GetRealNameTable(uint8_t nametable);
     uint8_t GetBackgroundColor(uint8_t attributeByte, uint8_t x, uint8_t y, uint8_t paletteIndex);
     uint8_t GetBackDropColor();
@@ -174,11 +188,15 @@ private:
     void inc6502(uint8_t& value, bool dec);
     void incMem6502(std::pair<uint16_t, uint16_t> valueAddress, bool dec);
 
+    uint8_t GetPlayer1Bit();
+    uint8_t GetPlayer2Bit();
+
     void DebugRenderFrame(bool fullFrame);
     void DebugPrint();
     void DebugShowMemory(std::string page);
     void DebugPrintTables();
     void DebugPrintAttribute();
+    void DebugPrintOAM();
 
     char nesMemory[0x10000];
     char PPUmemory[0x4000];
@@ -205,6 +223,14 @@ private:
     SDL_Surface* nesSurface;
     SDL_Rect stretchRect;
 
+    bool strobingControllers;
+    uint8_t player1ReadCount;
+    uint8_t player2ReadCount;
+    ControllerData currentStatePlayer1;
+    ControllerData prevStatePlayer1;
+    ControllerData currentStatePlayer2;
+    ControllerData prevStatePlayer2;
+
     const std::string debugInstructionToString[57] = {
         "ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV", "CMP", "CPX", "CPY",
         "DEC", "DEX", "DEY", "EOR", "INC", "INX", "INY", "JMP", "JSR", "LDA", "LDX", "LDY", "LSR", "NOP", "ORA", "PHA", "PHP", "PLA", "PLP", "ROL",
@@ -213,6 +239,8 @@ private:
         "ACCUMULATOR", "J_ABSOLUTE", "ABSOLUTE", "ABSOLUTE_X_INDEX", "ABSOLUTE_Y_INDEX", "IMMEDIATE", "IMPLIED", "INDIRECT",
         "INDIRECT_X_INDEX", "INDIRECT_Y_INDEX", "RELATIVE", "ZEROPAGE", "ZEROPAGE_X_INDEX", "ZEROPAGE_Y_INDEX", "INVALID_ADDRESS_MODE"
     };
+
+    bool debug = false;
 
     const RGB nesPalette[0x40] = {
         RGB{124,124,124,255},

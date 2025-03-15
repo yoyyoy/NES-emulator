@@ -141,10 +141,10 @@ uint16_t NES::GetOperandAddress(AddressMode addressMode)
     case INDIRECT: return Read16Bit(registers.programCounter, true);
     case INDIRECT_X_INDEX:
         address = (Read8Bit(registers.programCounter, true) + registers.Xregister) % 256;
-        return Read16Bit(address, false);
+        return Read16BitWrapAround(address);
     case INDIRECT_Y_INDEX:
         address = Read8Bit(registers.programCounter, true);
-        return Read16Bit(address, false) + registers.Yregister;
+        return Read16BitWrapAround(address) + registers.Yregister;
     case RELATIVE:return Read8Bit(registers.programCounter, true);
     case ZEROPAGE: return Read8Bit(registers.programCounter, true);
     case ZEROPAGE_X_INDEX: return (Read8Bit(registers.programCounter, true) + registers.Xregister) % 256;
@@ -173,19 +173,19 @@ std::pair<uint16_t, uint16_t> NES::GetOperandAddressValue(AddressMode addressMod
     case IMPLIED: return pair<uint16_t,uint16_t>(0,0);
     case INDIRECT:
         address = Read16Bit(registers.programCounter, true);
-        return pair<uint16_t, uint16_t>(Read16Bit(address, false), address);
+        return pair<uint16_t, uint16_t>(Read16BitWrapAround(address), address);
     case INDIRECT_X_INDEX:
         address = (Read8Bit(registers.programCounter, true) + registers.Xregister) % 256;
-        address = Read16Bit(address, false);
+        address = Read16BitWrapAround(address);
         return pair<uint16_t, uint16_t>(Read8Bit(address, false), address);
     case INDIRECT_Y_INDEX:
         address = Read8Bit(registers.programCounter, true);
-        address = Read16Bit(address, false) + registers.Yregister;
+        address = Read16BitWrapAround(address) + registers.Yregister;
         return pair<uint16_t, uint16_t>(Read16Bit(address, false), address);
     case RELATIVE:
         return pair<uint16_t, uint16_t>(Read8Bit(registers.programCounter, true),0);
     case ZEROPAGE:
-        address = Read8Bit(registers.programCounter, true);
+        address = Read8Bit(registers.programCounter, true) & 0xFF;
         return pair<uint16_t, uint16_t>(Read8Bit(address, false), address);
     case ZEROPAGE_X_INDEX:
         address = (Read8Bit(registers.programCounter, true)+registers.Xregister)%256;
@@ -224,6 +224,7 @@ void NES::break6502()
     {
         PushStack16Bit(registers.programCounter+1);
         SetProcessorStatusFlag(BREAK, true);
+        registers.processorStatus |= 0b100000;
         PushStack8Bit(registers.processorStatus);
         registers.programCounter = Read16Bit(0xFFFE, false);
     }
@@ -310,9 +311,9 @@ void NES::subtract6502(uint8_t value)
     uint8_t notCarry = 1 - GetProcessorStatusFlag(CARRY);
     uint16_t result = registers.accumulator - value - notCarry;
     int16_t signedResult = (int8_t)registers.accumulator - (int8_t)value - notCarry;
-    registers.accumulator = result;
     SetProcessorStatusFlag(CARRY, (uint16_t)registers.accumulator >= (uint16_t)value + notCarry);
     SetProcessorStatusFlag(OVERFLOW, signedResult > 127 || signedResult < -128);
+    registers.accumulator = result;
     UpdateZeroAndNegativeFlags(registers.accumulator);
     PPUcycles += 6;
 }
@@ -518,8 +519,8 @@ void printOpcode(uint8_t opcode)
     case 0xF9: cout << "SBC abs y" << '\n'; return;
     case 0xFD: cout << "SBC abs x" << '\n'; return;
     case 0xFE: cout << "INC abs x" << '\n'; return;
-    default: 
-        cerr << "invalid opcode " << std::setfill('0') << std::setw(2) << std::hex << opcode << "\n";
+    default:
+        cerr << "invalid opcode " << std::setfill('0') << std::setw(2) << std::hex << ((int)opcode & 0xFF) << "\n";
     }
 }
 
@@ -571,7 +572,12 @@ void NES::ExecuteStep(uint8_t opcode)
     case 0x48: PPUcycles+=9; return PushStack8Bit(registers.accumulator); 
     case 0x49: return eor6502(GetOperandAddressValue(IMMEDIATE).first);
     case 0x4A: return shift6502(false, false, true, GetOperandAddressValue(ACCUMULATOR));
-    case 0x4C: PPUcycles+=9; registers.programCounter = GetOperandAddress(ABSOLUTE); return; 
+    case 0x4C: 
+        PPUcycles+=9; 
+        //cout << "PC: " << std::setfill('0') << std::setw(4) << std::hex << registers.programCounter << " -> ";
+        registers.programCounter = GetOperandAddress(ABSOLUTE);
+        //cout << std::setfill('0') << std::setw(4) << std::hex << registers.programCounter << "\n";
+        return; 
     case 0x4D: return eor6502(GetOperandAddressValue(ABSOLUTE).first);
     case 0x4E: return shift6502(false, false, false, GetOperandAddressValue(ABSOLUTE));
     case 0x50: return branch6502(OVERFLOW, false, Read8Bit(registers.programCounter, true));
@@ -582,7 +588,12 @@ void NES::ExecuteStep(uint8_t opcode)
     case 0x59: return eor6502(GetOperandAddressValue(ABSOLUTE_Y_INDEX).first);
     case 0x5D: return eor6502(GetOperandAddressValue(ABSOLUTE_X_INDEX).first);
     case 0x5E: return shift6502(false, false, false, GetOperandAddressValue(ABSOLUTE_X_INDEX));
-    case 0x60: PPUcycles+=18; registers.programCounter=PullStack16Bit()+1; return; 
+    case 0x60: 
+        PPUcycles+=18;
+        //cout << "PC: " << std::setfill('0') << std::setw(4) << std::hex << registers.programCounter << " -> ";
+        registers.programCounter = PullStack16Bit()+1;
+        //cout << std::setfill('0') << std::setw(4) << std::hex << registers.programCounter << "\n";
+        return; 
     case 0x61: return add6502(GetOperandAddressValue(INDIRECT_X_INDEX).first);
     case 0x65: return add6502(GetOperandAddressValue(ZEROPAGE).first);
     case 0x66: return shift6502(false, true, false, GetOperandAddressValue(ZEROPAGE));
@@ -679,9 +690,9 @@ void NES::ExecuteStep(uint8_t opcode)
     case 0xF9: return subtract6502(GetOperandAddressValue(ABSOLUTE_Y_INDEX).first);
     case 0xFD: return subtract6502(GetOperandAddressValue(ABSOLUTE_X_INDEX).first);
     case 0xFE: return incMem6502(GetOperandAddressValue(ABSOLUTE_X_INDEX), false);
-    default: 
-        cerr << "invalid opcode " << std::setfill('0') << std::setw(2) << std::hex << opcode << "\n";
-        exit(7);
+    //default: 
+        //cerr << "invalid opcode " << std::setfill('0') << std::setw(2) << std::hex << ((int)opcode & 0xFF) << "\n";
+        //debug=true;
     }
 }
 
@@ -753,13 +764,17 @@ void NES::Run()
     int frameCount=0;
     int64_t skipInstructions=0;
     bool skipFrame=false;
-    while(true)
+    bool running=true;
+    SDL_Event ev;
+    
+    chrono::time_point prevFrame = chrono::high_resolution_clock::now();
+    while(running)
     {
         uint8_t opcode = Read8Bit(registers.programCounter, true);
 
         ExecuteStep(opcode);
-        /*
-        if(skipInstructions<=0 && !skipFrame)
+        
+        if(skipInstructions<=0 && !skipFrame && debug)
         {
             string input = "";
             cin >> input;
@@ -777,6 +792,8 @@ void NES::Run()
                     DebugPrintTables();
                 else if (input[0] == 'a')
                     DebugPrintAttribute();
+                else if(input[0] == 'o')
+                    DebugPrintOAM();
                 else if (input[0] >= '0' && input[0] <= '9')
                     skipInstructions = stoll(input);
 
@@ -785,7 +802,7 @@ void NES::Run()
             }
         }
         
-        */
+        
         if(PPUcycles > PPUcyclesPerLine)
         {
             PPUcycles -= PPUcyclesPerLine;
@@ -811,13 +828,57 @@ void NES::Run()
                 PPUstatus.VBlanking = false;
                 PPUstatus.hitSprite0 = false;
                 PPUstatus.spriteOverflow = false;
+
                 // TODO show frame then sleep until we hit msPerFrame
                 SDL_BlitScaled(nesSurface, NULL, windowSurface, &stretchRect);
                 SDL_UpdateWindowSurface(win);
+                
+                while (SDL_PollEvent(&ev) != 0)
+                {
+                    switch (ev.type)
+                    {
+                    case SDL_QUIT:
+                        running = false;
+                        break;
+                    case SDL_KEYDOWN:
+                    case SDL_KEYUP:
+                        switch(ev.key.keysym.sym)
+                        {
+                        case SDLK_w:
+                            currentStatePlayer1.up=ev.type == SDL_KEYDOWN;
+                        break;
+                        case SDLK_s:
+                            currentStatePlayer1.down = ev.type == SDL_KEYDOWN;
+                            break;
+                        case SDLK_a:
+                            currentStatePlayer1.left = ev.type == SDL_KEYDOWN;
+                            break;
+                        case SDLK_d:
+                            currentStatePlayer1.right = ev.type == SDL_KEYDOWN;
+                            break;
+                        case SDLK_SPACE:
+                            currentStatePlayer1.A = ev.type == SDL_KEYDOWN;
+                            break;
+                        case SDLK_LSHIFT:
+                            currentStatePlayer1.B = ev.type == SDL_KEYDOWN;
+                            break;
+                        case SDLK_RSHIFT:
+                            currentStatePlayer1.select = ev.type == SDL_KEYDOWN;
+                            break;
+                        case SDLK_ESCAPE:
+                            currentStatePlayer1.start = ev.type == SDL_KEYDOWN;
+                            break;
+                        }
+                    break;
+                }
             }
+            this_thread::sleep_until(prevFrame + chrono::microseconds(static_cast<int>(msPerFrame*1000)));
+            prevFrame = chrono::high_resolution_clock::now();
+        }
         }
 
         skipInstructions--;
+        
     }
     SDL_DestroyWindow(win);
 }
