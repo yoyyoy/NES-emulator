@@ -5,6 +5,7 @@
 #include <string.h>
 #include <SDL2/SDL.h>
 #include <array>
+#include <memory>
 
 class NES
 {   
@@ -191,7 +192,6 @@ private:
     uint8_t GetPlayer1Bit();
     uint8_t GetPlayer2Bit();
 
-    void DebugRenderFrame(bool fullFrame);
     void DebugPrint();
     void DebugShowMemory(std::string page);
     void DebugPrintTables();
@@ -220,8 +220,10 @@ private:
 
     SDL_Window* win;
     SDL_Surface* windowSurface;
-    SDL_Surface* nesSurface;
+    SDL_Texture* nesTexture;
     SDL_Rect stretchRect;
+    SDL_Renderer *renderer;
+    std::unique_ptr<uint32_t[]> nesPixels;
 
     bool strobingControllers;
     uint8_t player1ReadCount;

@@ -111,16 +111,14 @@ void NES::InitSDL()
         std::cerr << "failed to create SDL window: " << SDL_GetError() << "\n";
         exit(9);
     }
-
-    windowSurface = SDL_GetWindowSurface(win);
-    nesSurface = SDL_CreateRGBSurface(0, 256, header.isPAL ? 240 : 224, 32, 0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000);
-
-    if (!nesSurface)
+    renderer = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
+    if (!renderer)
     {
-        std::cerr << "failed to create SDL surface: " << SDL_GetError() << "\n";
+        std::cerr << "failed to create SDL renderer: " << SDL_GetError() << "\n";
         exit(10);
     }
-
+    nesTexture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, 256, header.isPAL ? 240 : 224);
+    nesPixels = make_unique<uint32_t[]>(256* (header.isPAL ? 240 : 224));
     stretchRect.x=0;
     stretchRect.y=0;
     stretchRect.w=256*4;
@@ -696,20 +694,6 @@ void NES::ExecuteStep(uint8_t opcode)
     }
 }
 
-void NES::DebugRenderFrame(bool fullFrame)
-{
-    auto temp = scanline;
-    if(fullFrame) scanline=0;
-    while (scanline < numTotalLines - numVBlankLines)
-    {
-        PPURenderLine();
-        scanline++;
-    }
-    SDL_BlitScaled(nesSurface, NULL, windowSurface, &stretchRect);
-    SDL_UpdateWindowSurface(win);
-    scanline = temp;
-}
-
 void NES::DebugPrint()
 {
     cout << "PC: " << std::setfill('0') << std::setw(4) << std::hex << registers.programCounter << "\n";
@@ -773,16 +757,14 @@ void NES::Run()
         uint8_t opcode = Read8Bit(registers.programCounter, true);
 
         ExecuteStep(opcode);
-        
+
         if(skipInstructions<=0 && !skipFrame && debug)
         {
             string input = "";
             cin >> input;
             while(input != "c")
             {
-                if (input[0] == 'r')
-                    DebugRenderFrame(input[1]=='f');
-                else if (input[0] == 'p')
+                if (input[0] == 'p')
                     DebugPrint();
                 else if(input[0] == 'm')
                     DebugShowMemory(input.substr(1));
@@ -807,7 +789,11 @@ void NES::Run()
         {
             PPUcycles -= PPUcyclesPerLine;
             if(scanline < numTotalLines - numVBlankLines)
+            {
+                
                 PPURenderLine();
+                
+            }
             
             scanline++;
             if (scanline == numTotalLines - numVBlankLines)
@@ -829,10 +815,14 @@ void NES::Run()
                 PPUstatus.hitSprite0 = false;
                 PPUstatus.spriteOverflow = false;
 
-                // TODO show frame then sleep until we hit msPerFrame
-                SDL_BlitScaled(nesSurface, NULL, windowSurface, &stretchRect);
-                SDL_UpdateWindowSurface(win);
-                
+                //auto start = chrono::high_resolution_clock::now();
+                //SDL_RenderClear(renderer);
+                SDL_UpdateTexture(nesTexture, NULL, nesPixels.get(), 256 * sizeof(uint32_t));
+                SDL_RenderCopy(renderer, nesTexture, NULL, &stretchRect);
+                SDL_RenderPresent(renderer);
+                //auto end = chrono::high_resolution_clock::now();
+                //cout << "render time = " << chrono::duration<double, milli>(end - start).count() << "ms\n";
+
                 while (SDL_PollEvent(&ev) != 0)
                 {
                     switch (ev.type)

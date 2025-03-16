@@ -123,7 +123,7 @@ void NES::PPUWrite(uint8_t value)
 
 void NES::PPURenderLine()
 {
-    Uint32* scanlinePixels =(Uint32*)nesSurface->pixels;
+    Uint32 *scanlinePixels = (Uint32 *)(nesPixels.get());
     scanlinePixels += (scanline - (header.isPAL ? 0 : 8)) * 256;
 
     if(!PPUstatus.displayBackground && !PPUstatus.displaySprites)
@@ -448,8 +448,8 @@ void NES::PPUHandleRegisterWrite(uint8_t reg, uint8_t value)
     case 6:
         if (PPUstatus.firstRead)
         {
-            if(value == 0x1e)
-                std::cout << "probably title screen\n";
+            //if(value == 0x1e)
+            //    std::cout << "probably title screen\n";
             PPUstatus.currentNameTable = (value & 0b1100) >> 2;
             PPUstatus.tempAddress = value;
         }
