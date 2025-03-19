@@ -103,6 +103,14 @@ void NES::InitMemory(ifstream &romFile)
     registers.programCounter = Read16Bit(0xFFFC, false);
 }
 
+void UpdateAudioBuffer(void* userdata, Uint8* stream, int len)
+{
+    NES* cast = (NES*)userdata;
+    cast->dataQueueLock.lock();
+    cast->SDLAudioCallback(stream, len);
+    cast->dataQueueLock.unlock();
+}
+
 void NES::InitSDL()
 {
     win = SDL_CreateWindow("NES Emulator", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 256 * 4, header.isPAL ? 240 * 4 : 224 * 4, SDL_WINDOW_SHOWN);
@@ -123,6 +131,16 @@ void NES::InitSDL()
     stretchRect.y=0;
     stretchRect.w=256*4;
     stretchRect.h = (header.isPAL ? 240 : 224)*4;
+
+    SDL_memset(&want, 0, sizeof(want));
+    want.freq=44100;
+    want.format=AUDIO_S16SYS;
+    want.channels=1;
+    want.samples=512;
+    want.userdata = this;
+    want.callback = UpdateAudioBuffer;
+
+    device = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
 }
 
 uint16_t NES::GetOperandAddress(AddressMode addressMode)
@@ -217,7 +235,7 @@ void NES::UpdateZeroAndNegativeFlags(uint16_t result)
 }
 
 void NES::break6502()
-{//TODO read some stuff on break flag. make sure to implement correctly
+{
     if(!GetProcessorStatusFlag(INTERRUPT_DISABLE))
     {
         PushStack16Bit(registers.programCounter+1);
@@ -352,6 +370,7 @@ void NES::compare6502(uint8_t value, uint8_t value2)
     UpdateZeroAndNegativeFlags(value - value2);
     PPUcycles+=6;
 }
+
 void NES::incMem6502(std::pair<uint16_t, uint16_t> valueAddress, bool dec)
 {
     uint8_t value = valueAddress.first;
@@ -789,13 +808,12 @@ void NES::Run()
         {
             PPUcycles -= PPUcyclesPerLine;
             if(scanline < numTotalLines - numVBlankLines)
-            {
-                
                 PPURenderLine();
-                
-            }
             
             scanline++;
+
+            UpdateAudio();
+
             if (scanline == numTotalLines - numVBlankLines)
             {
                 if (PPUstatus.doNMI)
@@ -815,13 +833,9 @@ void NES::Run()
                 PPUstatus.hitSprite0 = false;
                 PPUstatus.spriteOverflow = false;
 
-                //auto start = chrono::high_resolution_clock::now();
-                //SDL_RenderClear(renderer);
                 SDL_UpdateTexture(nesTexture, NULL, nesPixels.get(), 256 * sizeof(uint32_t));
                 SDL_RenderCopy(renderer, nesTexture, NULL, &stretchRect);
                 SDL_RenderPresent(renderer);
-                //auto end = chrono::high_resolution_clock::now();
-                //cout << "render time = " << chrono::duration<double, milli>(end - start).count() << "ms\n";
 
                 while (SDL_PollEvent(&ev) != 0)
                 {
@@ -871,4 +885,46 @@ void NES::Run()
         
     }
     SDL_DestroyWindow(win);
+}
+
+void NES::SDLAudioCallback(Uint8* stream, int len)
+{
+    if(audioDataQueue.empty())
+        return;
+
+    auto frontPtr = audioDataQueue.front().data();
+    memcpy(stream, frontPtr, len);
+    audioDataQueue.pop();
+    
+}
+
+void NES::UpdateAudio()
+{
+    //262 doesn't divide by 4 perfectly, shame
+    if(scanline == (header.isPAL ? 78 : 65))
+    {
+        APUQuaterClock();
+    }
+    else if(scanline == (header.isPAL ? 156 : 131))
+    {
+        APUQuaterClock();
+        APUHalfClock();
+    }
+    else if(scanline == (header.isPAL ? 234 : 196))
+    {
+        APUQuaterClock();
+    }
+    else if(scanline == numTotalLines)
+    {
+        APUQuaterClock();
+        APUHalfClock();
+        APUFrameClock();
+        MixAudio();
+    }
+
+}
+
+void NES::MixAudio()
+{
+
 }

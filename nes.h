@@ -6,6 +6,9 @@
 #include <SDL2/SDL.h>
 #include <array>
 #include <memory>
+#include <mutex>
+#include <queue>
+
 
 class NES
 {   
@@ -19,8 +22,9 @@ public:
     }
     
     void Run();
-private:
-    struct Header
+    void SDLAudioCallback(Uint8* stream, int len);
+    std::mutex dataQueueLock; 
+private : struct Header
     {
         uint8_t PRGROMsize;
         uint8_t CHRROMsize;
@@ -132,6 +136,21 @@ private:
         bool right = false;
     };
 
+    struct PulseAudio
+    {
+        uint8_t duty;
+        bool infinite;
+        bool constantVol;
+        uint8_t volumeEnvelope;
+        bool sweepEnabled;
+        uint8_t period;
+        bool negate;
+        uint8_t shift;
+        int16_t timer;
+        uint8_t lengthLoadCounter; 
+        std::vector<uint16_t> inProgressData;
+    };
+
     void ParseHeader(std::ifstream &romFile);
     void InitMemory(std::ifstream &romFile);
     void InitSDL();
@@ -170,6 +189,11 @@ private:
     uint8_t GetBackDropColor();
     uint8_t GetSpriteColor(uint8_t attributeByte, uint8_t paletteIndex);
     void UpdateSprites();
+    void APUQuaterClock();
+    void APUHalfClock();
+    void APUFrameClock();
+    void UpdateAudio();
+    void MixAudio();
 
     void add6502(uint8_t value);
     void subtract6502(uint8_t value);
@@ -224,6 +248,7 @@ private:
     SDL_Rect stretchRect;
     SDL_Renderer *renderer;
     std::unique_ptr<uint32_t[]> nesPixels;
+    std::unique_ptr<uint8_t[]> audioData;
 
     bool strobingControllers;
     uint8_t player1ReadCount;
@@ -232,6 +257,20 @@ private:
     ControllerData prevStatePlayer1;
     ControllerData currentStatePlayer2;
     ControllerData prevStatePlayer2;
+
+    PulseAudio pulse1;
+    PulseAudio pulse2;
+
+    SDL_AudioSpec want, have;
+    SDL_AudioDeviceID device;
+
+    std::queue<std::array<uint16_t,512>> audioDataQueue;
+    std::array<uint16_t,512> partialData;
+    uint16_t partialCounter;
+
+    uint16_t APUDivider;
+    uint16_t APUDividerReload;
+    bool APUDividerReloadFlag;
 
     const std::string debugInstructionToString[57] = {
         "ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV", "CMP", "CPX", "CPY",
