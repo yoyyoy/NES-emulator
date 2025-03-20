@@ -75,7 +75,7 @@ uint8_t NES::Read8Bit(uint16_t address, bool incrementPC)
         case 0x16: return GetPlayer1Bit();
         case 0x17: return GetPlayer2Bit();
         default:
-            return nesMemory[address];
+            return APUHandleRegisterRead(address-0x4000);
         }
     }
 
@@ -111,22 +111,22 @@ void NES::Write8Bit(uint16_t address, uint8_t value)
     else if(address < 0x4020)
     {
         address-=0x4000;
-        switch(address)
-        {//TODO audio registers and controller input registers
-        case 0x16:
-        case 0x17:
+        
+        if(address<0x16)
+        {
             bool doStrobe = value & 1;
-            if(!doStrobe && strobingControllers)
-            {//update prev state only when strobe is turned off
-                prevStatePlayer1=currentStatePlayer1;
-                prevStatePlayer2=currentStatePlayer2;
-                player1ReadCount=0;
-                player2ReadCount=0;
+            if (!doStrobe && strobingControllers)
+            { // update prev state only when strobe is turned off
+                prevStatePlayer1 = currentStatePlayer1;
+                prevStatePlayer2 = currentStatePlayer2;
+                player1ReadCount = 0;
+                player2ReadCount = 0;
             }
-            strobingControllers=doStrobe;
-            break;
+            strobingControllers = doStrobe;
         }
-
+        else if(address < 0x18)
+            APUHandleRegisterWrite(address, value);
+        
     }
     else
     {

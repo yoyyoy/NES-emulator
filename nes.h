@@ -151,6 +151,48 @@ private : struct Header
         std::vector<uint16_t> inProgressData;
     };
 
+    struct TriangleAudio
+    {
+        bool infinite;
+        uint8_t linearCounterLoad;
+        uint16_t timer;
+        uint8_t lengthLoadCounter;
+        std::vector<uint16_t> inProgressData;
+    };
+
+    struct NoiseAudio
+    {
+        bool infinite;
+        bool constantVolume;
+        uint8_t volumeEnvelope;
+        bool loop;
+        uint8_t period;
+        uint8_t lengthLoadCounter;
+        std::vector<uint16_t> inProgressData;
+    };
+
+    struct DMCAudio
+    {
+        bool IRQEnable;
+        bool loop;
+        uint8_t frequency;
+        uint8_t loadCounter;
+        uint8_t sampleAddress;
+        uint8_t sampleLength;
+        std::vector<uint16_t> inProgressData;
+    };
+
+    struct APUStatus
+    {
+        bool enableDMC=false;
+        bool enableNoise=false;
+        bool enableTriangle=false;
+        bool enablePulse2=false;
+        bool enablePulse1=false;
+        bool mode5steps=false;
+        bool inhibitIRQ=false;
+    } APUstatus;
+
     void ParseHeader(std::ifstream &romFile);
     void InitMemory(std::ifstream &romFile);
     void InitSDL();
@@ -192,6 +234,8 @@ private : struct Header
     void APUQuaterClock();
     void APUHalfClock();
     void APUFrameClock();
+    void APUHandleRegisterWrite(uint16_t address, uint8_t value);
+    uint8_t APUHandleRegisterRead(uint16_t address);
     void UpdateAudio();
     void MixAudio();
 
@@ -260,6 +304,9 @@ private : struct Header
 
     PulseAudio pulse1;
     PulseAudio pulse2;
+    TriangleAudio triangle;
+    NoiseAudio noise;
+    DMCAudio DMC;
 
     SDL_AudioSpec want, have;
     SDL_AudioDeviceID device;
@@ -270,7 +317,11 @@ private : struct Header
 
     uint16_t APUDivider;
     uint16_t APUDividerReload;
+    int APUscanlineTiming=0;
+    int APUstage=0;
     bool APUDividerReloadFlag;
+    bool DMCinterrupt;
+    bool frameInterrupt;
 
     const std::string debugInstructionToString[57] = {
         "ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV", "CMP", "CPX", "CPY",

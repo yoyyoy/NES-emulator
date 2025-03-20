@@ -811,7 +811,7 @@ void NES::Run()
                 PPURenderLine();
             
             scanline++;
-
+            APUscanlineTiming+=2;
             UpdateAudio();
 
             if (scanline == numTotalLines - numVBlankLines)
@@ -898,33 +898,3 @@ void NES::SDLAudioCallback(Uint8* stream, int len)
     
 }
 
-void NES::UpdateAudio()
-{
-    //262 doesn't divide by 4 perfectly, shame
-    if(scanline == (header.isPAL ? 78 : 65))
-    {
-        APUQuaterClock();
-    }
-    else if(scanline == (header.isPAL ? 156 : 131))
-    {
-        APUQuaterClock();
-        APUHalfClock();
-    }
-    else if(scanline == (header.isPAL ? 234 : 196))
-    {
-        APUQuaterClock();
-    }
-    else if(scanline == numTotalLines)
-    {
-        APUQuaterClock();
-        APUHalfClock();
-        APUFrameClock();
-        MixAudio();
-    }
-
-}
-
-void NES::MixAudio()
-{
-
-}
