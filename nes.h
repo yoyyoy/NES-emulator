@@ -139,16 +139,18 @@ private : struct Header
     struct PulseAudio
     {
         uint8_t duty;
+        float decodedWaveform;
         bool infinite;
         bool constantVol;
         uint8_t volumeEnvelope;
+        uint8_t decayCounter;
         bool sweepEnabled;
         uint8_t period;
         bool negate;
         uint8_t shift;
         int16_t timer;
-        uint8_t lengthLoadCounter; 
-        std::vector<uint16_t> inProgressData;
+        uint8_t lengthLoadCounter;
+
     };
 
     struct TriangleAudio
@@ -157,7 +159,6 @@ private : struct Header
         uint8_t linearCounterLoad;
         uint16_t timer;
         uint8_t lengthLoadCounter;
-        std::vector<uint16_t> inProgressData;
     };
 
     struct NoiseAudio
@@ -168,7 +169,6 @@ private : struct Header
         bool loop;
         uint8_t period;
         uint8_t lengthLoadCounter;
-        std::vector<uint16_t> inProgressData;
     };
 
     struct DMCAudio
@@ -176,10 +176,12 @@ private : struct Header
         bool IRQEnable;
         bool loop;
         uint8_t frequency;
+        int frequencyDecoded;
         uint8_t loadCounter;
         uint8_t sampleAddress;
         uint8_t sampleLength;
-        std::vector<uint16_t> inProgressData;
+        uint8_t sampleBuffer;
+        uint8_t shiftCounter=0;
     };
 
     struct APUStatus
@@ -236,8 +238,11 @@ private : struct Header
     void APUFrameClock();
     void APUHandleRegisterWrite(uint16_t address, uint8_t value);
     uint8_t APUHandleRegisterRead(uint16_t address);
+    void UpdateDMC(); //called once per scanline, as accurate as i can get until CPU clock cycle accuracy is better 
     void UpdateAudio();
     void MixAudio();
+    void FillBuffers();
+    void FillPulseData(PulseAudio& pulseChannel, uint8_t* data);
 
     void add6502(uint8_t value);
     void subtract6502(uint8_t value);
@@ -319,6 +324,7 @@ private : struct Header
     uint16_t APUDividerReload;
     int APUscanlineTiming=0;
     int APUstage=0;
+    int DMCClockCycles=0;
     bool APUDividerReloadFlag;
     bool DMCinterrupt;
     bool frameInterrupt;
