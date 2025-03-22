@@ -92,6 +92,7 @@ void NES::InitMemory(ifstream &romFile)
         numVBlankLines=72;
         numTotalLines=312;
         msPerFrame=20;
+        DMC.frequencyDecoded = 398;
     }
     else
     {
@@ -99,6 +100,7 @@ void NES::InitMemory(ifstream &romFile)
         numTotalLines=262;
         msPerFrame=16.66666;
         scanline=8;
+        DMC.frequencyDecoded = 428;
     }
     registers.programCounter = Read16Bit(0xFFFC, false);
 }
@@ -133,7 +135,7 @@ void NES::InitSDL()
     stretchRect.h = (header.isPAL ? 240 : 224)*4;
 
     SDL_memset(&want, 0, sizeof(want));
-    want.freq=44100;
+    want.freq=48000;
     want.format=AUDIO_S16SYS;
     want.channels=1;
     want.samples=512;
@@ -141,6 +143,12 @@ void NES::InitSDL()
     want.callback = UpdateAudioBuffer;
 
     device = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+    if (device == 0)
+    {
+        std::cerr << "failed to create SDL audio device: " << SDL_GetError() << "\n";
+        exit(20);
+    }
+    SDL_PauseAudioDevice(device, 0);
 }
 
 uint16_t NES::GetOperandAddress(AddressMode addressMode)

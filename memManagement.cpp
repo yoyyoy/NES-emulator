@@ -112,7 +112,7 @@ void NES::Write8Bit(uint16_t address, uint8_t value)
     {
         address-=0x4000;
         
-        if(address<0x16)
+        if(address==0x16)
         {
             bool doStrobe = value & 1;
             if (!doStrobe && strobingControllers)

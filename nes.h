@@ -149,6 +149,7 @@ private : struct Header
         bool negate;
         uint8_t shift;
         int16_t timer;
+        uint8_t currentLengthCounter;
         uint8_t lengthLoadCounter;
 
     };
@@ -156,8 +157,10 @@ private : struct Header
     struct TriangleAudio
     {
         bool infinite;
+        uint8_t currentLinearCounter;
         uint8_t linearCounterLoad;
         uint16_t timer;
+        uint8_t currentLengthCounter;
         uint8_t lengthLoadCounter;
     };
 
@@ -166,8 +169,10 @@ private : struct Header
         bool infinite;
         bool constantVolume;
         uint8_t volumeEnvelope;
+        uint8_t decayCounter;
         bool loop;
         uint8_t period;
+        uint8_t currentLengthCounter;
         uint8_t lengthLoadCounter;
     };
 
@@ -177,11 +182,13 @@ private : struct Header
         bool loop;
         uint8_t frequency;
         int frequencyDecoded;
-        uint8_t loadCounter;
+        uint8_t currentOutput;
         uint8_t sampleAddress;
         uint8_t sampleLength;
         uint8_t sampleBuffer;
         uint8_t shiftCounter=0;
+
+        std::vector<uint8_t> inProgressData;
     };
 
     struct APUStatus
@@ -240,7 +247,7 @@ private : struct Header
     uint8_t APUHandleRegisterRead(uint16_t address);
     void UpdateDMC(); //called once per scanline, as accurate as i can get until CPU clock cycle accuracy is better 
     void UpdateAudio();
-    void MixAudio();
+    void MixAudio(uint8_t* pulse1Data, uint8_t* pulse2Data, uint8_t* triangleData, uint8_t* noiseData);
     void FillBuffers();
     void FillPulseData(PulseAudio& pulseChannel, uint8_t* data);
 
@@ -318,7 +325,7 @@ private : struct Header
 
     std::queue<std::array<uint16_t,512>> audioDataQueue;
     std::array<uint16_t,512> partialData;
-    uint16_t partialCounter;
+    uint16_t partialCounter=0;
 
     uint16_t APUDivider;
     uint16_t APUDividerReload;
