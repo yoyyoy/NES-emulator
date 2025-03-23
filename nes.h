@@ -164,8 +164,11 @@ private : struct Header
         bool infinite;
         uint8_t currentLinearCounter;
         uint8_t linearCounterLoad;
+        bool reloadLinear=false;
         uint16_t timer;
         uint8_t length;
+
+        double waveformPos = 0;
     };
 
     struct NoiseAudio
@@ -178,7 +181,10 @@ private : struct Header
         uint8_t decayCounter;
         bool loop;
         uint8_t period;
+        uint16_t periodClockCycles;
         uint8_t length;
+
+        double waveformPos = 0;
     };
 
     struct DMCAudio

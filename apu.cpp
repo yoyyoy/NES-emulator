@@ -85,11 +85,14 @@ void NES::APUHandleRegisterWrite(uint16_t address, uint8_t value)
     case 0x9:
     break;
     case 0xA:
-        triangle.timer = (pulse1.timer & 0xFF00) | value;
+        triangle.timer = (triangle.timer & 0xFF00) | value;
+        //triangle.waveformPos = 0;
     break;
     case 0xB:
         triangle.length = lengthLUT[(value & 0b11111000) >> 3];
-        triangle.timer = (pulse1.timer & 0x00FF) | ((value & 0b111) << 8);
+        triangle.timer = (triangle.timer & 0x00FF) | ((value & 0b111) << 8);
+        //triangle.waveformPos=0;
+        triangle.reloadLinear=true;
     break;
     case 0xC:
         noise.infinite = value & 0b100000;
@@ -102,6 +105,57 @@ void NES::APUHandleRegisterWrite(uint16_t address, uint8_t value)
     case 0xE:
         noise.loop=value & 0b10000000;
         noise.period = value & 0xF;
+        switch(noise.period)
+        {
+        case 0x0:
+            noise.periodClockCycles = header.isPAL ? 4 : 4;
+            break;
+        case 0x1:
+            noise.periodClockCycles = header.isPAL ? 8 : 8;
+            break;
+        case 0x2:
+            noise.periodClockCycles = header.isPAL ? 14 : 16;
+            break;
+        case 0x3:
+            noise.periodClockCycles = header.isPAL ? 30 : 32;
+            break;
+        case 0x4:
+            noise.periodClockCycles = header.isPAL ? 60 : 64;
+            break;
+        case 0x5:
+            noise.periodClockCycles = header.isPAL ? 88 : 96;
+            break;
+        case 0x6:
+            noise.periodClockCycles = header.isPAL ? 118 : 128;
+            break;
+        case 0x7:
+            noise.periodClockCycles = header.isPAL ? 148 : 160;
+            break;
+        case 0x8:
+            noise.periodClockCycles = header.isPAL ? 188 : 202;
+            break;
+        case 0x9:
+            noise.periodClockCycles = header.isPAL ? 236 : 254;
+            break;
+        case 0xA:
+            noise.periodClockCycles = header.isPAL ? 354 : 380;
+            break;
+        case 0xB:
+            noise.periodClockCycles = header.isPAL ? 472 : 508;
+            break;
+        case 0xC:
+            noise.periodClockCycles = header.isPAL ? 708 : 762;
+            break;
+        case 0xD:
+            noise.periodClockCycles = header.isPAL ? 944 : 1016;
+            break;
+        case 0xE:
+            noise.periodClockCycles = header.isPAL ? 1890 : 2034;
+            break;
+        case 0xF:
+            noise.periodClockCycles = header.isPAL ? 1890 : 4068;
+            break;
+        }
     break;
     case 0xF:
         noise.length = lengthLUT[value >> 3];
@@ -149,6 +203,10 @@ void NES::APUHandleRegisterWrite(uint16_t address, uint8_t value)
         APUstatus.enableTriangle = value & 0b100;
         APUstatus.enablePulse2 = value & 0b10;
         APUstatus.enablePulse1 = value & 0b1;
+        if(!APUstatus.enablePulse1) pulse1.length=0;
+        if(!APUstatus.enablePulse2) pulse2.length=0;
+        if(!APUstatus.enableNoise) noise.length=0;
+        if(!APUstatus.enableTriangle) triangle.length=0;
     break;
     case 0x17:
         APUstatus.inhibitIRQ = value & 0b1000000;
@@ -219,6 +277,7 @@ void NES::UpdateDMC()
     DMCClockCycles+=(header.isPAL ? 106 : 113);
     while(DMCClockCycles >= DMC.frequencyDecoded)
     {//TODO implement
+        DMC.inProgressData.push_back(0);
         DMCClockCycles-=DMC.frequencyDecoded;
     }
 }
@@ -280,14 +339,13 @@ void NES::FillBuffers()
         double numWaveforms = (header.isPAL ? 1662607.0 / 200.0 : 1789773.0 / 240.0) / (32 * (triangle.timer + 1));
         double numSamplesPerWaveform = (double)numSamples / numWaveforms;
         int samplesWritten =0;
-        double waveformPos=0;
         constexpr int triangleWaveformLUT[32] = {15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
         for(; samplesWritten < numSamples; samplesWritten++)
         {
-            triangleData[samplesWritten] = triangleWaveformLUT[(int)floor((waveformPos/numSamplesPerWaveform) * 32)];
-            waveformPos++;
-            while(waveformPos>=numSamplesPerWaveform)
-                waveformPos-=numSamplesPerWaveform;
+            triangleData[samplesWritten] = triangleWaveformLUT[(int)floor((triangle.waveformPos/numSamplesPerWaveform) * 32)];
+            triangle.waveformPos++;
+            while (triangle.waveformPos >= numSamplesPerWaveform)
+                triangle.waveformPos -= numSamplesPerWaveform;
         }
     }
 
@@ -300,12 +358,22 @@ void NES::FillBuffers()
     }
     else
     {
+        double numWaveforms = (header.isPAL ? 1662607.0 / 200.0 : 1789773.0 / 240.0) / noise.periodClockCycles;
+        double numSamplesPerWaveform = (double)numSamples / numWaveforms;
+        int samplesWritten = 0;
+        bool randResult = rand() & 1;
         for(int i=0; i<numSamples; i++)
         {
-            if (rand() & 1)
+            if (randResult)
                 noiseData[i]= (noise.constantVolume ? noise.volumeEnvelopeLoad : noise.decayCounter);
             else
                 noiseData[i]=0;
+            noise.waveformPos++;
+            while (noise.waveformPos >= numSamplesPerWaveform)
+            {
+                noise.waveformPos -= numSamplesPerWaveform;
+                randResult=rand() & 1;
+            }
         }
 
     }
@@ -341,6 +409,14 @@ void NES::APUQuaterClock()
     ClockEnvelope(pulse2.envelopeStart, pulse2.decayCounter, pulse2.volumeEnvelope, pulse2.volumeEnvelopeLoad, pulse2.infinite, pulse2.constantVol);
     ClockEnvelope(noise.envelopeStart, noise.decayCounter, noise.volumeEnvelope, noise.volumeEnvelopeLoad, noise.infinite, noise.constantVolume);
     //TODO triangle counter here
+    if(triangle.reloadLinear)
+    {
+        triangle.currentLinearCounter=triangle.linearCounterLoad;
+    }
+    else if(triangle.currentLinearCounter>0)
+        triangle.currentLinearCounter--;
+    if (!triangle.infinite)
+        triangle.reloadLinear = false;
 }
 
 void NES::APUHalfClock()
@@ -436,8 +512,9 @@ void NES::MixAudio(uint8_t *pulse1Data, uint8_t *pulse2Data, uint8_t *triangleDa
     constexpr TNDLUT tndOut;
     int numSamples = 12000 / (header.isPAL ? 50 : 60);
     //fill out DMC with most recent value if not exactly quarter frame # samples yet
+    //TODO
     while(DMC.inProgressData.size() < numSamples)
-        DMC.inProgressData.push_back(DMC.currentOutput);
+        DMC.inProgressData.push_back(0);
 
     for (int i = 0; i < numSamples; i++)
     {
@@ -445,9 +522,12 @@ void NES::MixAudio(uint8_t *pulse1Data, uint8_t *pulse2Data, uint8_t *triangleDa
         
         if(partialCounter>=512)
         {
+            dataQueueLock.lock();
             audioDataQueue.push(partialData);
+            dataQueueLock.unlock();
             partialCounter=0;
         }
     }
+    DMC.inProgressData.clear();
     
 }
