@@ -143,15 +143,20 @@ private : struct Header
         bool infinite;
         bool constantVol;
         uint8_t volumeEnvelope;
+        uint8_t volumeEnvelopeLoad;
+        bool envelopeStart;
         uint8_t decayCounter;
         bool sweepEnabled;
         uint8_t period;
+        uint8_t periodLoad;
+        bool sweepReload=false;
         bool negate;
         uint8_t shift;
         int16_t timer;
-        uint8_t currentLengthCounter;
-        uint8_t lengthLoadCounter;
+        int16_t targetTimer;
+        uint8_t length;
 
+        double waveformPos=0;
     };
 
     struct TriangleAudio
@@ -160,8 +165,7 @@ private : struct Header
         uint8_t currentLinearCounter;
         uint8_t linearCounterLoad;
         uint16_t timer;
-        uint8_t currentLengthCounter;
-        uint8_t lengthLoadCounter;
+        uint8_t length;
     };
 
     struct NoiseAudio
@@ -169,11 +173,12 @@ private : struct Header
         bool infinite;
         bool constantVolume;
         uint8_t volumeEnvelope;
+        uint8_t volumeEnvelopeLoad;
+        bool envelopeStart;
         uint8_t decayCounter;
         bool loop;
         uint8_t period;
-        uint8_t currentLengthCounter;
-        uint8_t lengthLoadCounter;
+        uint8_t length;
     };
 
     struct DMCAudio
@@ -249,7 +254,8 @@ private : struct Header
     void UpdateAudio();
     void MixAudio(uint8_t* pulse1Data, uint8_t* pulse2Data, uint8_t* triangleData, uint8_t* noiseData);
     void FillBuffers();
-    void FillPulseData(PulseAudio& pulseChannel, uint8_t* data);
+    void FillPulseData(PulseAudio& pulseChannel, uint8_t* data, bool enabled);
+    void ClockEnvelope(bool &envelopeStart, uint8_t& decayCounter, uint8_t& volumeEnvelope, uint8_t volumeEnvelopeLoad, bool infinite, bool constantVolume);
 
     void add6502(uint8_t value);
     void subtract6502(uint8_t value);

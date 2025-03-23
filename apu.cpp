@@ -1,7 +1,10 @@
 #include "nes.h"
 
+
+
 void NES::APUHandleRegisterWrite(uint16_t address, uint8_t value)
 {
+    constexpr uint8_t lengthLUT[32]={10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30};
     switch(address)
     {
     case 0x0:
@@ -19,20 +22,25 @@ void NES::APUHandleRegisterWrite(uint16_t address, uint8_t value)
         pulse1.infinite = value & 0b100000;
         pulse1.constantVol = value & 0b10000;
         pulse1.volumeEnvelope = value & 0xF;
+        pulse1.volumeEnvelopeLoad=pulse1.volumeEnvelope;
     break;
     case 0x1:
         pulse1.sweepEnabled = value & 0b10000000;
         pulse1.period = (value & 0b1110000) >> 4;
+        pulse1.periodLoad=pulse1.period;
         pulse1.negate = value & 0b1000;
         pulse1.shift = value&0b111;
+        pulse1.sweepReload=true;
     break;
     case 0x2:
         pulse1.timer = (pulse1.timer & 0xFF00) | value;
+        pulse1.targetTimer=pulse1.timer;
     break;
     case 0x3:
-        pulse1.lengthLoadCounter = (value &0b11111000) >> 3;
-        pulse1.currentLengthCounter=pulse1.lengthLoadCounter;
+        pulse1.length = lengthLUT[(value & 0b11111000) >> 3];
         pulse1.timer = (pulse1.timer & 0x00FF) | ((value & 0b111) <<8);
+        pulse1.targetTimer = pulse1.timer;
+        pulse1.envelopeStart=true;
     break;
     case 0x4:
         pulse2.duty = (value & 0b11000000) >> 6;
@@ -49,20 +57,25 @@ void NES::APUHandleRegisterWrite(uint16_t address, uint8_t value)
         pulse2.infinite = value & 0b100000;
         pulse2.constantVol = value & 0b10000;
         pulse2.volumeEnvelope = value & 0xF;
+        pulse2.volumeEnvelopeLoad = pulse2.volumeEnvelope;
     break;
     case 0x5:
         pulse2.sweepEnabled = value & 0b10000000;
         pulse2.period = (value & 0b1110000) >> 4;
+        pulse2.periodLoad = pulse2.period;
         pulse2.negate = value & 0b1000;
         pulse2.shift = value & 0b111;
+        pulse2.sweepReload = true;
     break;
     case 0x6:
-        pulse2.timer = (pulse1.timer & 0xFF00) | value;
+        pulse2.timer = (pulse2.timer & 0xFF00) | value;
+        pulse2.targetTimer = pulse2.timer;
     break;
     case 0x7:
-        pulse2.lengthLoadCounter = (value & 0b11111000) >> 3;
-        pulse2.currentLengthCounter = pulse1.lengthLoadCounter;
-        pulse2.timer = (pulse1.timer & 0x00FF) | ((value & 0b111) << 8);
+        pulse2.length = lengthLUT[(value & 0b11111000) >> 3];
+        pulse2.timer = (pulse2.timer & 0x00FF) | ((value & 0b111) << 8);
+        pulse2.targetTimer = pulse2.timer;
+        pulse2.envelopeStart = true;
     break;
     case 0x8:
         triangle.infinite = value & 0b10000000;
@@ -75,14 +88,14 @@ void NES::APUHandleRegisterWrite(uint16_t address, uint8_t value)
         triangle.timer = (pulse1.timer & 0xFF00) | value;
     break;
     case 0xB:
-        triangle.lengthLoadCounter = (value & 0b11111000) >> 3;
-        triangle.currentLengthCounter = pulse1.lengthLoadCounter;
+        triangle.length = lengthLUT[(value & 0b11111000) >> 3];
         triangle.timer = (pulse1.timer & 0x00FF) | ((value & 0b111) << 8);
     break;
     case 0xC:
         noise.infinite = value & 0b100000;
         noise.constantVolume = value & 0b10000;
         noise.volumeEnvelope = value & 0xF;
+        noise.volumeEnvelopeLoad=noise.volumeEnvelope;
     break;
     case 0xD:
     break;
@@ -91,8 +104,8 @@ void NES::APUHandleRegisterWrite(uint16_t address, uint8_t value)
         noise.period = value & 0xF;
     break;
     case 0xF:
-        noise.lengthLoadCounter = value >> 3;
-        noise.currentLengthCounter = pulse1.lengthLoadCounter;
+        noise.length = lengthLUT[value >> 3];
+        noise.envelopeStart=true;
     break;
     case 0x10:
         DMC.IRQEnable = value & 0b10000000;
@@ -150,10 +163,10 @@ uint8_t NES::APUHandleRegisterRead(uint16_t address)
         return 0;
 
     uint8_t result=0;
-    if(pulse1.lengthLoadCounter>0 && APUstatus.enablePulse1) result |=1;
-    if(pulse2.lengthLoadCounter>0 && APUstatus.enablePulse2) result |=0b10;
-    if(triangle.lengthLoadCounter>0 && APUstatus.enableTriangle) result |=0b100;
-    if(noise.lengthLoadCounter>0 && APUstatus.enableNoise) result |=0b1000;
+    if(pulse1.length>0 && APUstatus.enablePulse1) result |=1;
+    if(pulse2.length>0 && APUstatus.enablePulse2) result |=0b10;
+    if(triangle.length>0 && APUstatus.enableTriangle) result |=0b100;
+    if(noise.length>0 && APUstatus.enableNoise) result |=0b1000;
     //TODO implement DMC before handling this flag
     if(frameInterrupt) result |=0b1000000;
     if(DMCinterrupt) result |=0b10000000;
@@ -210,10 +223,10 @@ void NES::UpdateDMC()
     }
 }
 
-void NES::FillPulseData(PulseAudio& pulseChannel, uint8_t* data)
+void NES::FillPulseData(PulseAudio& pulseChannel, uint8_t* data, bool enabled)
 {
     int numSamples = 12000 / (header.isPAL ? 50 : 60);
-    if (pulseChannel.timer < 8 || pulseChannel.currentLengthCounter == 0)
+    if ((pulseChannel.timer < 8 || pulseChannel.length == 0 || !enabled || pulseChannel.targetTimer > 0x7FF))
     {
         for (int i = 0; i < numSamples; i++)
         {
@@ -225,36 +238,39 @@ void NES::FillPulseData(PulseAudio& pulseChannel, uint8_t* data)
         uint8_t volume = (pulseChannel.constantVol ? pulseChannel.volumeEnvelope : pulseChannel.decayCounter);
         double numWaveforms = (header.isPAL ? 1662607.0 / 200.0 : 1789773.0 / 240.0) / (16.0 * (pulseChannel.timer + 1));
         double numSamplesPerWaveform = (double)numSamples / numWaveforms;
-        int numHighSamples = floor(numSamplesPerWaveform * pulseChannel.decodedWaveform);
-        int numlowSamples = ceil(numSamplesPerWaveform * (1 - pulseChannel.decodedWaveform));
-        int samplesWritten = 0;
-        while(samplesWritten < numSamples)
+        for(int i=0; i<numSamples; i++)
         {
-            for (int i = 0; i < numHighSamples && samplesWritten < numSamples; i++)
-            {
-                data[samplesWritten++] = volume;
-            }
-
-            for (int i = 0; i < numlowSamples && samplesWritten < numSamples; i++)
-            {
-                data[samplesWritten++] = 0;
-            }
+            data[i] = (pulseChannel.waveformPos/numSamplesPerWaveform > pulseChannel.decodedWaveform) ? 0 : (pulseChannel.constantVol ? pulseChannel.volumeEnvelopeLoad : pulseChannel.decayCounter);
+            pulseChannel.waveformPos++;
+            while (pulseChannel.waveformPos >= numSamplesPerWaveform)
+                pulseChannel.waveformPos -= numSamplesPerWaveform;
         }
     }
 }
 
 void NES::FillBuffers()
 {
+    //debug
+    //APUstatus.enableNoise=false;
+    //APUstatus.enableTriangle=false;
+    //APUstatus.enableDMC=false;
+
+    //these flags constantly overwrites length
+    if(!APUstatus.enablePulse1) pulse1.length=0;
+    if(!APUstatus.enablePulse2) pulse2.length=0;
+    if(!APUstatus.enableNoise) noise.length=0;
+    if(!APUstatus.enableTriangle) triangle.length=0;
+
     int numSamples = 12000 / (header.isPAL ? 50 : 60);
     //pulse channels
     uint8_t pulse1Data[numSamples];
     uint8_t pulse2Data[numSamples];
-    FillPulseData(pulse1, pulse1Data);
-    FillPulseData(pulse2, pulse2Data);
+    FillPulseData(pulse1, pulse1Data, APUstatus.enablePulse1);
+    FillPulseData(pulse2, pulse2Data, APUstatus.enablePulse2);
 
     //triangle
     uint8_t triangleData[numSamples];
-    if(triangle.timer<2 || triangle.currentLinearCounter ==0 || triangle.currentLengthCounter == 0)
+    if(triangle.timer<2 || triangle.currentLinearCounter ==0 || triangle.length == 0 || !APUstatus.enableTriangle)
     {
         for(int i=0; i< numSamples; i++)
             triangleData[i]=0;
@@ -277,7 +293,7 @@ void NES::FillBuffers()
 
     //noise
     uint8_t noiseData[numSamples];
-    if(noise.currentLengthCounter == 0)
+    if(noise.length == 0 || !APUstatus.enableNoise)
     {
         for (int i = 0; i < numSamples; i++)
             noiseData[i] = 0;
@@ -287,7 +303,7 @@ void NES::FillBuffers()
         for(int i=0; i<numSamples; i++)
         {
             if (rand() & 1)
-                noiseData[i]= (noise.constantVolume ? noise.volumeEnvelope : noise.decayCounter);
+                noiseData[i]= (noise.constantVolume ? noise.volumeEnvelopeLoad : noise.decayCounter);
             else
                 noiseData[i]=0;
         }
@@ -296,14 +312,85 @@ void NES::FillBuffers()
     MixAudio(pulse1Data, pulse2Data, triangleData, noiseData);
 }
 
+void NES::ClockEnvelope(bool &envelopeStart, uint8_t &decayCounter, uint8_t &volumeEnvelope, uint8_t volumeEnvelopeLoad, bool infinite, bool constantVolume)
+{
+    if (envelopeStart)
+    {
+        envelopeStart = false;
+        decayCounter = 15;
+        volumeEnvelope = volumeEnvelopeLoad;
+    }
+    else
+    {
+        if (volumeEnvelope == 0)
+        {
+            volumeEnvelope = volumeEnvelopeLoad;
+            if (decayCounter == 0 && infinite)
+                decayCounter = 15;
+            else if (decayCounter != 0)
+                decayCounter--;
+        }
+        else
+            volumeEnvelope--;
+    }
+}
+
 void NES::APUQuaterClock()
 {
-    
+    ClockEnvelope(pulse1.envelopeStart, pulse1.decayCounter, pulse1.volumeEnvelope, pulse1.volumeEnvelopeLoad, pulse1.infinite, pulse1.constantVol);
+    ClockEnvelope(pulse2.envelopeStart, pulse2.decayCounter, pulse2.volumeEnvelope, pulse2.volumeEnvelopeLoad, pulse2.infinite, pulse2.constantVol);
+    ClockEnvelope(noise.envelopeStart, noise.decayCounter, noise.volumeEnvelope, noise.volumeEnvelopeLoad, noise.infinite, noise.constantVolume);
+    //TODO triangle counter here
 }
 
 void NES::APUHalfClock()
 {
+    if(!pulse1.infinite && pulse1.length>0) pulse1.length--;
+    if(!pulse2.infinite && pulse2.length>0) pulse2.length--;
+    if(!triangle.infinite && triangle.length>0) triangle.length--;
+    if(!noise.infinite && noise.length>0) noise.length--;
 
+    int16_t changeAmount = (pulse1.timer >> pulse1.shift) & 0x7FF;
+    if (pulse1.negate)
+        changeAmount = -changeAmount - 1;
+    pulse1.targetTimer = pulse1.timer + changeAmount;
+    if (pulse1.targetTimer < 0)
+        pulse1.targetTimer = 0;
+
+    changeAmount = (pulse2.timer >> pulse2.shift) & 0x7FF;
+    if (pulse2.negate)
+        changeAmount = -changeAmount;
+    pulse2.targetTimer = pulse2.timer + changeAmount;
+    if (pulse2.targetTimer < 0)
+        pulse2.targetTimer = 0;
+
+    if (pulse1.sweepEnabled && pulse1.shift != 0)
+    {
+        if (pulse1.period == 0 && pulse1.targetTimer <=0x7FF)
+                pulse1.timer = pulse1.targetTimer;
+
+        if (pulse1.period == 0 || pulse1.sweepReload)
+        {
+            pulse1.period = pulse1.periodLoad;
+            pulse1.sweepReload = false;
+        }
+        else if (pulse1.period > 0)
+            pulse1.period--;
+    }
+
+    if (pulse2.sweepEnabled && pulse2.shift != 0)
+    {
+        if (pulse2.period == 0 && pulse2.targetTimer <= 0x7FF)
+                pulse2.timer = pulse2.targetTimer;
+
+        if (pulse2.period == 0 || pulse2.sweepReload)
+        {
+            pulse2.period = pulse2.periodLoad;
+            pulse2.sweepReload = false;
+        }
+        else if (pulse2.period > 0)
+            pulse2.period--;
+    }
 }
 
 void NES::APUFrameClock()
@@ -313,7 +400,7 @@ void NES::APUFrameClock()
 
 constexpr double makePulseLUT(int i)
 {
-    return (32767 * (95.52 / ((8128.0 / i) + 100)));
+    return (95.52 / ((8128.0 / i) + 100));
 }
 
 struct PulseLUT
@@ -329,7 +416,7 @@ struct PulseLUT
 
 constexpr double makeTNDLUT(int i)
 {
-    return (32767 * (163.67 / ((24329.0 / i) + 100)));
+    return (163.67 / ((24329.0 / i) + 100));
 }
 
 struct TNDLUT
@@ -354,7 +441,7 @@ void NES::MixAudio(uint8_t *pulse1Data, uint8_t *pulse2Data, uint8_t *triangleDa
 
     for (int i = 0; i < numSamples; i++)
     {
-        partialData[partialCounter++] = (uint16_t)(2*(pulseOut.vals[pulse1Data[i]+pulse2Data[i]] + tndOut.vals[3*triangleData[i] + 2*noiseData[i]+DMC.inProgressData[i]]));
+        partialData[partialCounter++] = (uint16_t)(20000*(pulseOut.vals[pulse1Data[i]+pulse2Data[i]] + tndOut.vals[3*triangleData[i] + 2*noiseData[i]+DMC.inProgressData[i]]));
         
         if(partialCounter>=512)
         {
