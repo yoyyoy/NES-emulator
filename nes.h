@@ -195,11 +195,15 @@ private : struct Header
         int frequencyDecoded;
         uint8_t currentOutput;
         uint8_t sampleAddress;
-        uint8_t sampleLength;
+        uint16_t addressOffset=0;
+        uint16_t sampleLength;
+        uint16_t currentBytesRemaining;
         uint8_t sampleBuffer;
         uint8_t shiftCounter=0;
+        bool silentFlag=false;
 
         std::vector<uint8_t> inProgressData;
+        double waveformPos = 0;
     };
 
     struct APUStatus

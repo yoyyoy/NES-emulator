@@ -821,7 +821,6 @@ void NES::Run()
             scanline++;
             APUscanlineTiming+=2;
             UpdateAudio();
-
             if (scanline == numTotalLines - numVBlankLines)
             {
                 if (PPUstatus.doNMI)

@@ -86,12 +86,10 @@ void NES::APUHandleRegisterWrite(uint16_t address, uint8_t value)
     break;
     case 0xA:
         triangle.timer = (triangle.timer & 0xFF00) | value;
-        //triangle.waveformPos = 0;
     break;
     case 0xB:
         triangle.length = lengthLUT[(value & 0b11111000) >> 3];
         triangle.timer = (triangle.timer & 0x00FF) | ((value & 0b111) << 8);
-        //triangle.waveformPos=0;
         triangle.reloadLinear=true;
     break;
     case 0xC:
@@ -192,9 +190,11 @@ void NES::APUHandleRegisterWrite(uint16_t address, uint8_t value)
     break;
     case 0x12:
         DMC.sampleAddress = value;
+        DMC.addressOffset=0;
     break;
     case 0x13:
-        DMC.sampleLength = value;
+        DMC.sampleLength = (value*16)+1;
+        DMC.currentBytesRemaining = DMC.sampleLength;
     break;
     case 0x15:
         DMCinterrupt=false;
@@ -273,12 +273,60 @@ void NES::UpdateAudio()
 }
 
 void NES::UpdateDMC()
-{
+{    
     DMCClockCycles+=(header.isPAL ? 106 : 113);
-    while(DMCClockCycles >= DMC.frequencyDecoded)
-    {//TODO implement
-        DMC.inProgressData.push_back(0);
+    double samplesPerClock = 48000.0 * ((double)DMC.frequencyDecoded / (header.isPAL ? 1662607.0 : 1789773.0 ));
+    while (DMCClockCycles >= DMC.frequencyDecoded)
+    {
         DMCClockCycles-=DMC.frequencyDecoded;
+        while(DMC.waveformPos<samplesPerClock)
+        {
+            DMC.inProgressData.push_back(DMC.currentOutput);
+            DMC.waveformPos++;
+        }
+        DMC.waveformPos-=samplesPerClock;
+
+        //no playback if disabled
+        if (!APUstatus.enableDMC)
+            continue;
+
+        if(DMC.shiftCounter==0)
+        {//get next byte
+            if(DMC.currentBytesRemaining==0)
+            {//but if there aren't any bytes remaining, do special logic
+                if(DMC.loop)
+                {
+                    DMC.currentBytesRemaining=DMC.sampleLength;
+                    DMC.addressOffset=0;
+                }
+                else if(DMC.IRQEnable)
+                {
+                    DMC.silentFlag=true;
+                    DMCinterrupt=true;
+                    continue;
+                }
+            }
+            DMC.silentFlag=false;
+            int readAddress = 0xC000 + (DMC.sampleAddress * 64) + DMC.addressOffset++;
+            if (readAddress > 0xFFFF)
+                readAddress -= 0x8000;
+            DMC.sampleBuffer = Read8Bit(readAddress & 0xFFFF, false);
+        }
+        
+        if(!DMC.silentFlag)
+        {
+            if ((DMC.sampleBuffer & 1) && DMC.currentOutput <= 125)
+                DMC.currentOutput += 2;
+            else if (!(DMC.sampleBuffer & 1) && DMC.currentOutput >= 2)
+                DMC.currentOutput -= 2;
+        }
+
+        
+        DMC.sampleBuffer >>=1;
+        DMC.shiftCounter++;
+        if(DMC.shiftCounter>=8)
+            DMC.shiftCounter=0;
+        
     }
 }
 
@@ -512,9 +560,8 @@ void NES::MixAudio(uint8_t *pulse1Data, uint8_t *pulse2Data, uint8_t *triangleDa
     constexpr TNDLUT tndOut;
     int numSamples = 12000 / (header.isPAL ? 50 : 60);
     //fill out DMC with most recent value if not exactly quarter frame # samples yet
-    //TODO
     while(DMC.inProgressData.size() < numSamples)
-        DMC.inProgressData.push_back(0);
+        DMC.inProgressData.push_back(DMC.currentOutput);
 
     for (int i = 0; i < numSamples; i++)
     {
