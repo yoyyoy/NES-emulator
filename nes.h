@@ -1,14 +1,11 @@
 #include <iostream>
-#include <fstream>
-#include <cstdint>
 #include <vector>
 #include <string.h>
 #include <SDL2/SDL.h>
-#include <array>
 #include <memory>
 #include <mutex>
 #include <queue>
-
+#include "mappers/mapper.h"
 
 class NES
 {   
@@ -24,19 +21,7 @@ public:
     void Run();
     void SDLAudioCallback(Uint8* stream, int len);
     std::mutex dataQueueLock; 
-private : struct Header
-    {
-        uint8_t PRGROMsize;
-        uint8_t CHRROMsize;
-        bool isHorizontalArrangement;
-        bool hasBatteryBackedRam;
-        bool hasTrainer;
-        bool is4ScreenVRAM;
-        uint8_t mapperType;
-        bool isVSsystem;
-        uint8_t RAMsize;
-        bool isPAL;
-    } header;
+private:
 
     struct NESregisters
     {
@@ -294,18 +279,16 @@ private : struct Header
     void DebugPrintAttribute();
     void DebugPrintOAM();
 
+    std::unique_ptr<NESMapper> mapper;
+
     char nesMemory[0x10000];
-    char PPUmemory[0x4000];
+    char PPUPalette[0x20];
     char PPUOAM[256];
-    std::vector<std::array<char,0x4000>> ROMbanks;
-    std::vector<std::array<char, 0x2000>> VROMbanks;
     int scanline=0;
     int PPUcycles=0;
     const int PPUcyclesPerLine=341;
 
-    int activeROMBank1;
-    int activeROMBank2;
-    int activeVROMBank=0;
+    Header header;
 
     //differ depending on NTSC or PAL
     int numVBlankLines;

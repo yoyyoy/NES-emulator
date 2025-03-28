@@ -21,7 +21,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/release/program",
             "args": [
-                "-p=/home/yoy/Downloads/Donkey Kong (USA) (GameCube Edition).nes"
+                "-p=/home/yoy/Downloads/Legend of Zelda, The (USA).nes"
         ],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "Build Release" // Links to the debug build task

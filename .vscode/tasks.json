@@ -8,6 +8,7 @@
                 "-fdiagnostics-color=always",
                 "-g",
                 "${workspaceFolder}/*.cpp",
+                "${workspaceFolder}/*/*.cpp",
                 "-o",
                 "${workspaceFolder}/debug/program",
                 "-lSDL2"
@@ -32,6 +33,7 @@
                 "-fdiagnostics-color=always",
                 "-O3",
                 "${workspaceFolder}/*.cpp",
+                "${workspaceFolder}/*/*.cpp",
                 "-o",
                 "${workspaceFolder}/release/program",
                 "-lSDL2"

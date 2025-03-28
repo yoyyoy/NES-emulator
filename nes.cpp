@@ -50,41 +50,28 @@ void NES::ParseHeader(ifstream &romFile)
 void NES::InitMemory(ifstream &romFile)
 {
     if (header.hasTrainer)
+    {
+        cout << "Warning: ROM file indicates it includes a 512 Byte trainer. This is rare and untested on this emulator\n";
         romFile.read(nesMemory + 0x7000, 512);
-
-    for (int i = 0; i < header.PRGROMsize; i++)
-    {
-        ROMbanks.emplace_back();
-        romFile.read(ROMbanks.back().data(), 0x4000);
     }
 
-    for (int i = 0; i < header.CHRROMsize; i++)
+    switch(header.mapperType)
     {
-        VROMbanks.emplace_back();
-        romFile.read(VROMbanks.back().data(), 0x2000);
+    case 0:
+        mapper = make_unique<NROM>(romFile, header);
+    break;
+    //case 1:
+    //    mapper = make_unique<MMC1>(romFile, header);
+    //break;
+    default:
+        cerr << "Mapper not supported: " << (int)header.mapperType << "\n";
+        exit(5);
     }
-
+    
     if (romFile.fail())
     {
         cerr << "Error while reading file\n";
         exit(4);
-    }
-
-    // TODO add support for mappers for ROMbanks size > 2
-    if (ROMbanks.size() == 1)
-    {
-        activeROMBank1=0;
-        activeROMBank2=0;
-    }
-    else if (ROMbanks.size() == 2)
-    {
-        activeROMBank1 = 0;
-        activeROMBank2 = 1;
-    }
-    else
-    {
-        cerr << "mappers not supported yet\n";
-        exit(5);
     }
 
     if(header.isPAL)
@@ -781,6 +768,7 @@ void NES::Run()
     chrono::time_point prevFrame = chrono::high_resolution_clock::now();
     while(running)
     {
+        //TODO handle IRQ from APU and potentially mapper
         uint8_t opcode = Read8Bit(registers.programCounter, true);
 
         ExecuteStep(opcode);

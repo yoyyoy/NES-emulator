@@ -21,12 +21,11 @@ uint8_t NES::PPUHandleRegRead(uint8_t reg)
     case 3:
     case 5:
     case 6: return nesMemory[reg + 0x2000];
-    
     case 2: return PPUGet2002();
     case 4: return PPUOAM[PPUstatus.OAMcurrentAddress];
     case 7: return PPUReadMemory();
-
     }
+    return 0;
 }
 
 uint8_t NES::PPUReadMemory()
@@ -37,14 +36,10 @@ uint8_t NES::PPUReadMemory()
     {
         if (PPUstatus.incrementBy32) PPUstatus.VRAMaddress += 32;
         else PPUstatus.VRAMaddress++;
-        return PPUmemory[PPUstatus.VRAMaddress & 0x3FFF];
+        return PPUPalette[(PPUstatus.VRAMaddress - 0x3F00) % 0x20];
     }
 
-
-    if ((PPUstatus.VRAMaddress & 0x3FFF) < 0x2000)
-        PPUstatus.dataReadBuffer = VROMbanks[activeVROMBank].at(PPUstatus.VRAMaddress & 0x3FFF);
-    else
-        PPUstatus.dataReadBuffer = PPUmemory[PPUstatus.VRAMaddress & 0x3FFF];
+    PPUstatus.dataReadBuffer = mapper->ReadPPU(PPUstatus.VRAMaddress & 0x3FFF);
 
     if (PPUstatus.incrementBy32) PPUstatus.VRAMaddress += 32;
     else PPUstatus.VRAMaddress++;
@@ -57,12 +52,12 @@ void NES::DebugPrintAttribute()
     {
         for (int j = 0; j < 8; j++)
         {
-            std::cout << std::setfill('0') << std::setw(2) << std::hex << ((uint16_t)(PPUmemory[0x23C0 + j + i * 8]) & 0xFF) << " ";
+            //std::cout << std::setfill('0') << std::setw(2) << std::hex << ((uint16_t)(PPUmemory[0x23C0 + j + i * 8]) & 0xFF) << " ";
         }
 
         for (int j = 0; j < 8; j++)
         {
-            std::cout << std::setfill('0') << std::setw(2) << std::hex << ((uint16_t)PPUmemory[0x27C0 + j + i * 8] & 0xFF) << " ";
+            //std::cout << std::setfill('0') << std::setw(2) << std::hex << ((uint16_t)PPUmemory[0x27C0 + j + i * 8] & 0xFF) << " ";
         }
         std::cout << '\n';
     }
@@ -74,12 +69,12 @@ void NES::DebugPrintTables()
     {
         for(int j=0; j<32; j++)
         {
-            std::cout << std::setfill('0') << std::setw(2) << std::hex << ((uint16_t)(PPUmemory[0x2000 + j + i * 32]) & 0xFF) << " ";
+            //std::cout << std::setfill('0') << std::setw(2) << std::hex << ((uint16_t)(PPUmemory[0x2000 + j + i * 32]) & 0xFF) << " ";
         }
 
         for (int j = 0; j < 32; j++)
         {
-            std::cout << std::setfill('0') << std::setw(2) << std::hex << ((uint16_t)PPUmemory[0x2400 + j + i * 32] & 0xFF) << " ";
+            //std::cout << std::setfill('0') << std::setw(2) << std::hex << ((uint16_t)PPUmemory[0x2400 + j + i * 32] & 0xFF) << " ";
         }
         std::cout << '\n';
     }
@@ -98,9 +93,7 @@ void NES::DebugPrintOAM()
 }
 
 void NES::PPUWrite(uint8_t value)
-{//TODO write only to real addresses and not mirrors
-    //if(value == 0x3A)
-    //std::cout << "attempted to write 0x" << std::hex << (uint32_t)value << " to 0x" << PPUstatus.VRAMaddress << "\n"; 
+{
     //limit to original copy
     auto temp = PPUstatus.VRAMaddress & 0x3FFF;
     
@@ -111,14 +104,14 @@ void NES::PPUWrite(uint8_t value)
 
         if (!(temp & 0x0003))
             temp &= 0x3F0F;
+        PPUPalette[temp-0x3F00] = value;
     }
-
-    PPUmemory[temp] = value;
+    else
+        mapper->WritePPU(temp, value);
     if(PPUstatus.incrementBy32)
         PPUstatus.VRAMaddress += 32;
     else
         PPUstatus.VRAMaddress++;
-    //DebugPrintTables();
 }
 
 void NES::PPURenderLine()
@@ -155,8 +148,8 @@ void NES::PPURenderLine()
         for (int i = 0; i < (nametableXOffset == 0 ? 32 : 33); i++)
         {
             uint8_t patternIndex = nametableBytes[i];
-            uint8_t firstByte = VROMbanks[activeVROMBank].at(patternIndex * 16 + yOffset + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
-            uint8_t secondByte = VROMbanks[activeVROMBank].at(patternIndex * 16 + yOffset + 8 + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
+            uint8_t firstByte = mapper->ReadPPU(patternIndex * 16 + yOffset + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
+            uint8_t secondByte = mapper->ReadPPU(patternIndex * 16 + yOffset + 8 + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
 
             for (int j = 0; j < 8; j++)
             {
@@ -197,7 +190,7 @@ void NES::PPURenderLine()
     }
     else
     {
-        RGB color = nesPalette[PPUmemory[0x3F00]];
+        RGB color = nesPalette[PPUPalette[0]];
         for (int i = 0; i < 256; i++)
         {
             scanlinePixels[i] = *((Uint32 *)&color);
@@ -229,19 +222,19 @@ void NES::PPURenderLine()
         {
             if(yPos>=8)
             {
-                firstByte = VROMbanks[activeVROMBank].at(((sprite.tileNumber & 0xFE) + 1) * 16 + (yPos - 8) + (sprite.tileNumber & 1 ? 0x1000 : 0));
-                secondByte = VROMbanks[activeVROMBank].at(((sprite.tileNumber & 0xFE) + 1) * 16 + (yPos - 8) + 8 + (sprite.tileNumber & 1 ? 0x1000 : 0));
+                firstByte = mapper->ReadPPU(((sprite.tileNumber & 0xFE) + 1) * 16 + (yPos - 8) + (sprite.tileNumber & 1 ? 0x1000 : 0));
+                secondByte = mapper->ReadPPU(((sprite.tileNumber & 0xFE) + 1) * 16 + (yPos - 8) + 8 + (sprite.tileNumber & 1 ? 0x1000 : 0));
             }
             else
             {
-                firstByte = VROMbanks[activeVROMBank].at((sprite.tileNumber & 0xFE) * 16 + yPos + (sprite.tileNumber & 1 ? 0x1000 : 0));
-                secondByte = VROMbanks[activeVROMBank].at((sprite.tileNumber & 0xFE) * 16 + yPos + 8 + (sprite.tileNumber & 1 ? 0x1000 : 0));
+                firstByte = mapper->ReadPPU((sprite.tileNumber & 0xFE) * 16 + yPos + (sprite.tileNumber & 1 ? 0x1000 : 0));
+                secondByte = mapper->ReadPPU((sprite.tileNumber & 0xFE) * 16 + yPos + 8 + (sprite.tileNumber & 1 ? 0x1000 : 0));
             }
         }
         else
         {
-            firstByte = VROMbanks[activeVROMBank].at(sprite.tileNumber * 16 + yPos + (PPUstatus.spritePatternTable ? 0x1000 : 0));
-            secondByte = VROMbanks[activeVROMBank].at(sprite.tileNumber * 16 + yPos + 8 + (PPUstatus.spritePatternTable ? 0x1000 : 0));
+            firstByte = mapper->ReadPPU(sprite.tileNumber * 16 + yPos + (PPUstatus.spritePatternTable ? 0x1000 : 0));
+            secondByte = mapper->ReadPPU(sprite.tileNumber * 16 + yPos + 8 + (PPUstatus.spritePatternTable ? 0x1000 : 0));
         }
 
         for(int i=0; i<8; i++)
@@ -279,15 +272,14 @@ void NES::PPURenderLine()
 uint8_t NES::GetBackDropColor()
 {
     if (!PPUstatus.VRAMaddress >= 0x3F00)
-        return PPUmemory[0x3F00];
+        return PPUPalette[0];
 
     auto temp = PPUstatus.VRAMaddress;
     temp -= 0x3F00;
     temp %= 0x20;
     if (temp & 0x0C)
         temp &= 0xEF;
-    temp += 0x3F00;
-    return PPUmemory[temp];
+    return PPUPalette[temp];
 }
 
 void NES::CalcNameTableCoords(uint8_t &nameTable, uint8_t &x, uint8_t &y)
@@ -330,14 +322,14 @@ void NES::PPUGetNameTableBytes(uint8_t nametable, uint8_t x, uint8_t y, char *ou
     
     uint16_t desired = 0x2000 + ((nametable << 10) + x + (y*32));
     for(int i=0; i<32-x; i++)
-        outBytes[i]=PPUmemory[desired+i];
+        outBytes[i]=mapper->ReadPPU(desired+i);
 
     if (nametable & 1) nametable = GetRealNameTable(nametable-1);
     else nametable = GetRealNameTable(nametable+1);
     
     desired = 0x2000 + ((nametable << 10) + (y * 32));
     for (int i = 32-x; i < 33; i++)
-        outBytes[i] = PPUmemory[desired + (i - (32-x))];
+        outBytes[i] = mapper->ReadPPU(desired + i - (32 - x));
 }
 
 void NES::PPUGetAttributeTableBytes(uint8_t nametable, uint8_t x, uint8_t y, char *outBytes)
@@ -346,7 +338,7 @@ void NES::PPUGetAttributeTableBytes(uint8_t nametable, uint8_t x, uint8_t y, cha
 
     uint16_t desired = 0x23C0 + (nametable << 10) + (x/4)+ ((y / 4) * 8);
     for (int i = 0; i < 8 - (x/4); i++)
-        outBytes[i] = PPUmemory[desired + i];
+        outBytes[i] = mapper->ReadPPU(desired + i);
 
     if (nametable & 1)
         nametable = GetRealNameTable(nametable - 1);
@@ -355,13 +347,12 @@ void NES::PPUGetAttributeTableBytes(uint8_t nametable, uint8_t x, uint8_t y, cha
 
     desired = 0x23C0 + (nametable << 10) + ((y / 4) * 8);
     for (int i = 8 - (x/4); i < 9; i++)
-        outBytes[i] = PPUmemory[desired + (i - (8 - (x/4)))];
-    
+        outBytes[i] = mapper->ReadPPU(desired + (i - (8 - (x/4))));
 }
 
 uint8_t NES::GetBackgroundColor(uint8_t attributeByte, uint8_t x, uint8_t y, uint8_t paletteIndex)
 {
-    if(paletteIndex==0) return PPUmemory[0x3F00];
+    if(paletteIndex==0) return PPUPalette[0];
     uint8_t mask = 0b11;
     uint8_t maskShift=0;
     if(x%4>=2)
@@ -369,17 +360,17 @@ uint8_t NES::GetBackgroundColor(uint8_t attributeByte, uint8_t x, uint8_t y, uin
     if(y%4>=2)
         maskShift+=2;
     uint8_t paletteNum = (attributeByte & (mask << (maskShift*2))) >> (maskShift*2);
-    return PPUmemory[0x3F00 + (paletteNum * 4) + paletteIndex];
+    return PPUPalette[(paletteNum * 4) + paletteIndex];
 }
 
 uint8_t NES::GetSpriteColor(uint8_t attributeByte, uint8_t paletteIndex)
 {
     // this memory address is mirrored across all palettes
     if (paletteIndex == 0)
-        return PPUmemory[0x3F00];
+        return PPUPalette[0];
 
     uint8_t paletteNum = attributeByte & 0b11;
-    return PPUmemory[0x3F10 + (paletteNum * 4) + paletteIndex];
+    return PPUPalette[(paletteNum * 4) + paletteIndex+ 0x10];
 }
 
 void NES::UpdateSprites()
@@ -471,14 +462,14 @@ void NES::PPUHandleRegisterWrite(uint8_t reg, uint8_t value)
         {
             memcpy(temp, nesMemory + (value * 0x100), 256);
         }
-        else if (value < 0xC0)
-        {
-            memcpy(temp, ROMbanks[activeROMBank1].data() + (value * 0x100), 256);
-        }
         else
         {
-            memcpy(temp, ROMbanks[activeROMBank2].data() + (value * 0x100), 256);
+            for(int i=0; i<256;i++)
+            {
+                temp[i] = mapper->ReadCPU(value * 0x100 + i);
+            }
         }
+
         memcpy(PPUOAM + PPUstatus.OAMcurrentAddress, temp, 256-PPUstatus.OAMcurrentAddress);
         if(PPUstatus.OAMcurrentAddress !=0)
         {

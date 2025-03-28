@@ -1,4 +1,3 @@
-#pragma once
 #include "nes.h"
 
 using namespace std;

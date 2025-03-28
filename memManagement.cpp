@@ -79,17 +79,7 @@ uint8_t NES::Read8Bit(uint16_t address, bool incrementPC)
         }
     }
 
-    if(address<0x8000)
-    {
-        //TODO potentially mapper related stuff
-        return nesMemory[address];
-    }
-
-    //TODO i dunno if mappers do stuff when reading
-    //ROM
-    if(address<0xC000) return ROMbanks[activeROMBank1][address-0x8000];
-    else return ROMbanks[activeROMBank2][address-0xC000];
-
+    return mapper->ReadCPU(address);
 }
 
 void NES::Write8Bit(uint16_t address, uint8_t value)
@@ -130,11 +120,8 @@ void NES::Write8Bit(uint16_t address, uint8_t value)
     }
     else
     {
-        //handle mapper controls
+        mapper->WriteCPU(address, value);
     }
-    //std::stringstream debugString;
-    //debugString << std::hex << ((address &0xFF00) >> 8);
-    //DebugShowMemory(debugString.str());
 }
 
 void NES::PushStack16Bit(uint16_t value)
