@@ -10,10 +10,10 @@
 class NES
 {   
 public:
-    NES(std::ifstream& file)
+    NES(std::ifstream& file, std::string name)
     {
         ParseHeader(file);
-        InitMemory(file);
+        InitMemory(file, name);
         InitSDL();
 
     }
@@ -32,14 +32,6 @@ private:
         uint8_t Yregister;
         uint8_t processorStatus = 0;
     } registers;
-    
-    enum MirrorType
-    {
-        HORIZONTAL,
-        VERTICAL,
-        SINGLE_SCREEN,
-        FOUR_SCREEN
-    };
     
     struct PPUstatus
     {
@@ -63,7 +55,6 @@ private:
         uint8_t Yscroll;
         uint16_t VRAMaddress;
         bool firstRead=true;
-        MirrorType nameTableMirror;
         uint8_t dataReadBuffer=0;
         uint8_t tempAddress;
     } PPUstatus;
@@ -203,7 +194,7 @@ private:
     } APUstatus;
 
     void ParseHeader(std::ifstream &romFile);
-    void InitMemory(std::ifstream &romFile);
+    void InitMemory(std::ifstream &romFile, std::string name);
     void InitSDL();
 
     void ExecuteStep(uint8_t opcode);
@@ -235,7 +226,6 @@ private:
     void CalcNameTableCoords(uint8_t& nameTable, uint8_t& x, uint8_t& y);
     void PPUGetNameTableBytes(uint8_t nametable, uint8_t x, uint8_t y, char *outBytes);
     void PPUGetAttributeTableBytes(uint8_t nametable, uint8_t x, uint8_t y, char *outBytes);
-    uint8_t GetRealNameTable(uint8_t nametable);
     uint8_t GetBackgroundColor(uint8_t attributeByte, uint8_t x, uint8_t y, uint8_t paletteIndex);
     uint8_t GetBackDropColor();
     uint8_t GetSpriteColor(uint8_t attributeByte, uint8_t paletteIndex);
@@ -334,7 +324,7 @@ private:
     bool APUDividerReloadFlag;
     bool DMCinterrupt;
     bool frameInterrupt;
-
+    
     const std::string debugInstructionToString[57] = {
         "ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV", "CMP", "CPX", "CPY",
         "DEC", "DEX", "DEY", "EOR", "INC", "INX", "INY", "JMP", "JSR", "LDA", "LDX", "LDY", "LSR", "NOP", "ORA", "PHA", "PHP", "PLA", "PLP", "ROL",
@@ -345,7 +335,6 @@ private:
     };
 
     bool debug = false;
-
     const RGB nesPalette[0x40] = {
         RGB{124,124,124,255},
         RGB{0,0,252,255},

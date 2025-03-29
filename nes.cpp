@@ -41,13 +41,9 @@ void NES::ParseHeader(ifstream &romFile)
 
     char unusedData[6];
     romFile.read(unusedData, 6);
-
-    //it's possible for nametable mirroring to change on the fly, so only use the header value to initialize PPUstatus
-    //then change it as needed. do not use header.isHorizontalArrangement or header.is4ScreenVRAM
-    PPUstatus.nameTableMirror = header.is4ScreenVRAM ? FOUR_SCREEN : header.isHorizontalArrangement ? VERTICAL : HORIZONTAL;
 }
 
-void NES::InitMemory(ifstream &romFile)
+void NES::InitMemory(ifstream &romFile, string name)
 {
     if (header.hasTrainer)
     {
@@ -60,9 +56,9 @@ void NES::InitMemory(ifstream &romFile)
     case 0:
         mapper = make_unique<NROM>(romFile, header);
     break;
-    //case 1:
-    //    mapper = make_unique<MMC1>(romFile, header);
-    //break;
+    case 1:
+        mapper = make_unique<MMC1>(romFile, header, name);
+    break;
     default:
         cerr << "Mapper not supported: " << (int)header.mapperType << "\n";
         exit(5);
@@ -703,8 +699,8 @@ void NES::ExecuteStep(uint8_t opcode)
     case 0xFD: return subtract6502(GetOperandAddressValue(ABSOLUTE_X_INDEX).first);
     case 0xFE: return incMem6502(GetOperandAddressValue(ABSOLUTE_X_INDEX), false);
     //default: 
-        //cerr << "invalid opcode " << std::setfill('0') << std::setw(2) << std::hex << ((int)opcode & 0xFF) << "\n";
-        //debug=true;
+    //    cerr << "invalid opcode " << std::setfill('0') << std::setw(2) << std::hex << ((int)opcode & 0xFF) << "\n";
+    //    debug=true;
     }
 }
 
@@ -737,7 +733,6 @@ void NES::DebugPrint()
     cout << "Y scroll: " << std::setfill('0') << std::setw(2) << std::hex << (int)PPUstatus.Yscroll << "\n";
     cout << "VRAM address: " << std::setfill('0') << std::setw(4) << std::hex << (int)PPUstatus.VRAMaddress << "\n";
     cout << "first read: " << (PPUstatus.firstRead ? "true" : "false") << "\n";
-    cout << "mirror type: " << PPUstatus.nameTableMirror << "\n";
 }
 
 void NES::DebugShowMemory(string page)
@@ -831,7 +826,7 @@ void NES::Run()
                 SDL_UpdateTexture(nesTexture, NULL, nesPixels.get(), 256 * sizeof(uint32_t));
                 SDL_RenderCopy(renderer, nesTexture, NULL, &stretchRect);
                 SDL_RenderPresent(renderer);
-
+                
                 while (SDL_PollEvent(&ev) != 0)
                 {
                     switch (ev.type)
@@ -879,6 +874,7 @@ void NES::Run()
         skipInstructions--;
         
     }
+    mapper->SaveGame();
     SDL_DestroyWindow(win);
 }
 

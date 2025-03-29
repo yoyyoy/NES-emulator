@@ -5,6 +5,7 @@
             "label": "Build Debug",
             "command": "/usr/bin/g++",
             "args": [
+                "-std=c++17",
                 "-fdiagnostics-color=always",
                 "-g",
                 "${workspaceFolder}/*.cpp",
@@ -30,6 +31,7 @@
             "label": "Build Release",
             "command": "/usr/bin/g++",
             "args": [
+                "-std=c++17",
                 "-fdiagnostics-color=always",
                 "-O3",
                 "${workspaceFolder}/*.cpp",

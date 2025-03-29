@@ -181,10 +181,8 @@ void NES::PPURenderLine()
             if (nametableX >= 32)
             {
                 nametableX -= 32;
-                if (nametable & 1)
-                    nametable = GetRealNameTable(nametable - 1);
-                else
-                    nametable = GetRealNameTable(nametable + 1);
+                if (nametable & 1) nametable = nametable - 1;
+                else nametable = nametable + 1;
             }
         }
     }
@@ -286,14 +284,7 @@ void NES::CalcNameTableCoords(uint8_t &nameTable, uint8_t &x, uint8_t &y)
 {
     nameTable = PPUstatus.currentNameTable;
     x = (PPUstatus.Xscroll) / 8;
-    if(x>=32)
-    {
-        x-=32;
-        if(nameTable & 1)
-            nameTable--;
-        else
-            nameTable++;
-    }
+
     y = (scanline + PPUstatus.Yscroll) / 8;
     if(y>=30)
     {
@@ -305,27 +296,14 @@ void NES::CalcNameTableCoords(uint8_t &nameTable, uint8_t &x, uint8_t &y)
     }
 }
 
-uint8_t NES::GetRealNameTable(uint8_t nametable)
-{
-    switch (PPUstatus.nameTableMirror)
-    {
-    case HORIZONTAL: return nametable & 0xFE;
-    case VERTICAL: return nametable & 0xFD;
-    case SINGLE_SCREEN: return 0;
-    default: return nametable;
-    }
-}
-
 void NES::PPUGetNameTableBytes(uint8_t nametable, uint8_t x, uint8_t y, char *outBytes)
 {
-    nametable=GetRealNameTable(nametable);
-    
     uint16_t desired = 0x2000 + ((nametable << 10) + x + (y*32));
     for(int i=0; i<32-x; i++)
         outBytes[i]=mapper->ReadPPU(desired+i);
 
-    if (nametable & 1) nametable = GetRealNameTable(nametable-1);
-    else nametable = GetRealNameTable(nametable+1);
+    if (nametable & 1) nametable = nametable-1;
+    else nametable = nametable+1;
     
     desired = 0x2000 + ((nametable << 10) + (y * 32));
     for (int i = 32-x; i < 33; i++)
@@ -334,16 +312,12 @@ void NES::PPUGetNameTableBytes(uint8_t nametable, uint8_t x, uint8_t y, char *ou
 
 void NES::PPUGetAttributeTableBytes(uint8_t nametable, uint8_t x, uint8_t y, char *outBytes)
 {
-    nametable = GetRealNameTable(nametable);
-
     uint16_t desired = 0x23C0 + (nametable << 10) + (x/4)+ ((y / 4) * 8);
     for (int i = 0; i < 8 - (x/4); i++)
         outBytes[i] = mapper->ReadPPU(desired + i);
 
-    if (nametable & 1)
-        nametable = GetRealNameTable(nametable - 1);
-    else
-        nametable = GetRealNameTable(nametable + 1);
+    if (nametable & 1) nametable = nametable - 1;
+    else nametable = nametable + 1;
 
     desired = 0x23C0 + (nametable << 10) + ((y / 4) * 8);
     for (int i = 8 - (x/4); i < 9; i++)
@@ -439,8 +413,6 @@ void NES::PPUHandleRegisterWrite(uint8_t reg, uint8_t value)
     case 6:
         if (PPUstatus.firstRead)
         {
-            //if(value == 0x1e)
-            //    std::cout << "probably title screen\n";
             PPUstatus.currentNameTable = (value & 0b1100) >> 2;
             PPUstatus.tempAddress = value;
         }

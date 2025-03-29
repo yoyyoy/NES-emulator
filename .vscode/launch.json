@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/debug/program",
             "args": [
-                "-p=/home/yoy/Downloads/Super Mario Bros. (Japan, USA).nes"
+                "-p=/home/yoy/Downloads/Legend of Zelda, The (USA).nes"
             ],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "Build Debug" // Links to the debug build task

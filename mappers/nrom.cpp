@@ -4,6 +4,8 @@
 
 NROM::NROM(std::ifstream &romFile, Header header)
 {
+    currentLayout = (header.is4ScreenVRAM ? FOUR_SCREEN : (header.isHorizontalArrangement ? HORIZONTAL : VERTICAL));
+
     for (int i = 0; i < header.PRGROMsize; i++)
         romFile.read((char*)ROM + i*0x4000, 0x4000);
     if (header.PRGROMsize == 1)
@@ -30,10 +32,17 @@ void NROM::WriteCPU(uint16_t address, uint8_t value)
 
 uint8_t NROM::ReadPPU(uint16_t address)
 {
+    address=GetRealNameTable(address);
     return VROM[address];
 }
 
 void NROM::WritePPU(uint16_t address, uint8_t value)
 {
+    address = GetRealNameTable(address);
     VROM[address]=value;
+}
+
+void NROM::SaveGame()
+{
+    return;
 }

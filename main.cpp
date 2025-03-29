@@ -1,11 +1,13 @@
 #include "nes.h"
+#include <filesystem>
 
 using namespace std;
 
 int main(int argc, char* argv[])
 {
     SDL_Init(SDL_INIT_EVERYTHING);
-
+    filesystem::create_directory("saves");
+    
     string romPath="";
     for(int i=0; i<argc; i++)
     {
@@ -22,7 +24,6 @@ int main(int argc, char* argv[])
         cerr << "No rom path specified. use -p=<PATH TO ROM>\n";
         return 1;
     }
-
     ifstream romFile(romPath, ifstream::basic_ios::binary);
     if(!romFile.is_open())
     {
@@ -30,9 +31,9 @@ int main(int argc, char* argv[])
         return 2;
     }
     
-    
+    filesystem::path filePath = romPath;
 
-    NES nes(romFile);
+    NES nes(romFile, filePath.stem());
     nes.Run();
     SDL_Quit();
 }
