@@ -116,7 +116,22 @@ void NES::InitSDL()
     stretchRect.y=0;
     stretchRect.w=256*4;
     stretchRect.h = (header.isPAL ? 240 : 224)*4;
-
+    /*
+    debugWin = SDL_CreateWindow("NES Emulator debug window", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 256 * 4, 240*4, SDL_WINDOW_SHOWN);
+    if (!debugWin)
+    {
+        std::cerr << "failed to create SDL window: " << SDL_GetError() << "\n";
+        exit(9);
+    }
+    debugRenderer = SDL_CreateRenderer(debugWin, -1, SDL_RENDERER_ACCELERATED);
+    if (!debugRenderer)
+    {
+        std::cerr << "failed to create SDL renderer: " << SDL_GetError() << "\n";
+        exit(10);
+    }
+    debugnesTexture = SDL_CreateTexture(debugRenderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING, 512, 480);
+    debugnesPixels = make_unique<uint32_t[]>(256 * 240 * 4);
+    */
     SDL_memset(&want, 0, sizeof(want));
     want.freq=48000;
     want.format=AUDIO_S16SYS;
@@ -767,7 +782,6 @@ void NES::Run()
         uint8_t opcode = Read8Bit(registers.programCounter, true);
 
         ExecuteStep(opcode);
-
         if(skipInstructions<=0 && !skipFrame && debug)
         {
             string input = "";
@@ -822,11 +836,28 @@ void NES::Run()
                 PPUstatus.VBlanking = false;
                 PPUstatus.hitSprite0 = false;
                 PPUstatus.spriteOverflow = false;
-
+                //PPUstatus.VRAMaddress = 0x2000 + (PPUstatus.currentNameTable << 10) + (PPUstatus.Yscroll/8)*32 + PPUstatus.Xscroll/8 +scanline;
                 SDL_UpdateTexture(nesTexture, NULL, nesPixels.get(), 256 * sizeof(uint32_t));
                 SDL_RenderCopy(renderer, nesTexture, NULL, &stretchRect);
                 SDL_RenderPresent(renderer);
+                /*
+                DebugRenderAllNametables();
+                SDL_UpdateTexture(debugnesTexture, NULL, debugnesPixels.get(), 512*sizeof(uint32_t));
+                SDL_RenderCopy(debugRenderer, debugnesTexture, NULL, &stretchRect);
+                SDL_RenderPresent(debugRenderer);
                 
+               
+                for(int i=0; i<4; i++)
+                {
+                    for(int j=0; j<240; j++)
+                    {
+                        for(int k=0; k<256; k++)
+                        {
+                            debugHighlightPixel[i][j][k] = false;
+                        }
+                    }
+                }
+                */
                 while (SDL_PollEvent(&ev) != 0)
                 {
                     switch (ev.type)
@@ -850,18 +881,42 @@ void NES::Run()
                         case SDLK_d:
                             currentStatePlayer1.right = ev.type == SDL_KEYDOWN;
                             break;
-                        case SDLK_SPACE:
+                        case SDLK_j:
                             currentStatePlayer1.A = ev.type == SDL_KEYDOWN;
                             break;
-                        case SDLK_LSHIFT:
+                        case SDLK_k:
                             currentStatePlayer1.B = ev.type == SDL_KEYDOWN;
                             break;
-                        case SDLK_RSHIFT:
+                        case SDLK_LSHIFT:
                             currentStatePlayer1.select = ev.type == SDL_KEYDOWN;
                             break;
                         case SDLK_ESCAPE:
                             currentStatePlayer1.start = ev.type == SDL_KEYDOWN;
                             break;
+                        case SDLK_UP:
+                            currentStatePlayer2.up=ev.type==SDL_KEYDOWN;
+                        break;
+                        case SDLK_DOWN:
+                            currentStatePlayer2.down = ev.type == SDL_KEYDOWN;
+                        break;
+                        case SDLK_LEFT:
+                            currentStatePlayer2.left = ev.type == SDL_KEYDOWN;
+                        break;
+                        case SDLK_RIGHT:
+                            currentStatePlayer2.right = ev.type == SDL_KEYDOWN;
+                        break;
+                        case SDLK_COMMA:
+                            currentStatePlayer2.B = ev.type == SDL_KEYDOWN;
+                        break;
+                        case SDLK_PERIOD:
+                            currentStatePlayer2.A = ev.type == SDL_KEYDOWN;
+                        break;
+                        case SDLK_RETURN:
+                            currentStatePlayer2.start = ev.type == SDL_KEYDOWN;
+                        break;
+                        case SDLK_RSHIFT:
+                            currentStatePlayer2.select = ev.type == SDL_KEYDOWN;
+                        break;
                         }
                     break;
                 }
@@ -888,4 +943,213 @@ void NES::SDLAudioCallback(Uint8* stream, int len)
     audioDataQueue.pop();
     
 }
+/*
+void NES::DebugRenderAllNametables()
+{
+    for(int line=0; line<240; line++)
+    {
+        Uint32 *scanlinePixels = (Uint32 *)(debugnesPixels.get());
+        scanlinePixels += line * 512;
 
+        char nametableBytes[33];
+        char attributeTableBytes[9];
+
+        uint8_t nametable, nametableX, nametableY;
+        nametableX=0;
+        nametableY=line/8;
+        nametable=0;
+        PPUGetNameTableBytes(nametable, nametableX, nametableY, nametableBytes);
+        PPUGetAttributeTableBytes(nametable, nametableX, nametableY, attributeTableBytes);
+
+        char nametableBytes2[33];
+        char attributeTableBytes2[9];
+        PPUGetNameTableBytes(nametable+1, nametableX, nametableY, nametableBytes2);
+        PPUGetAttributeTableBytes(nametable+1, nametableX, nametableY, attributeTableBytes2);
+
+        uint8_t yOffset = line % 8;
+
+        for (int i = 0; i < 32; i++)
+        {
+            uint8_t patternIndex = nametableBytes[i];
+            uint8_t firstByte = mapper->ReadPPU(patternIndex * 16 + yOffset + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
+            uint8_t secondByte = mapper->ReadPPU(patternIndex * 16 + yOffset + 8 + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
+
+            for (int j = 0; j < 8; j++)
+            {
+                uint8_t paletteIndex = 0;
+                if (firstByte & (1 << 7 - j))
+                    paletteIndex += 1;
+                if (secondByte & (1 << 7 - j))
+                    paletteIndex += 2;
+
+                int pixelPos = i * 8 + j;
+                uint8_t nesColor = GetBackgroundColor(attributeTableBytes[(i) / 4], nametableX, nametableY, paletteIndex);
+                RGB color = nesPalette[nesColor];
+                if (debugHighlightPixel[nametable][line][pixelPos])
+                {
+                    if(color.r < 205)
+                        color.r+=50;
+                    else
+                        color.r=255;
+
+                    if (color.g < 205)
+                        color.g += 50;
+                    else
+                        color.g = 255;
+
+                    if (color.b < 205)
+                        color.b += 50;
+                    else
+                        color.b = 255;
+                }
+                scanlinePixels[pixelPos] = *((Uint32 *)&color);
+                
+            }
+            nametableX++;
+        }
+
+        for (int i = 0; i < 32; i++)
+        {
+            uint8_t patternIndex = nametableBytes2[i];
+            uint8_t firstByte = mapper->ReadPPU(patternIndex * 16 + yOffset + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
+            uint8_t secondByte = mapper->ReadPPU(patternIndex * 16 + yOffset + 8 + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
+
+            for (int j = 0; j < 8; j++)
+            {
+                uint8_t paletteIndex = 0;
+                if (firstByte & (1 << 7 - j))
+                    paletteIndex += 1;
+                if (secondByte & (1 << 7 - j))
+                    paletteIndex += 2;
+
+                int pixelPos = i * 8 + j +256;
+                uint8_t nesColor = GetBackgroundColor(attributeTableBytes2[(i) / 4], nametableX, nametableY, paletteIndex);
+                RGB color = nesPalette[nesColor];
+                if (debugHighlightPixel[nametable+1][line][pixelPos-256])
+                {
+                    if (color.r < 205)
+                        color.r += 50;
+                    else
+                        color.r = 255;
+
+                    if (color.g < 205)
+                        color.g += 50;
+                    else
+                        color.g = 255;
+
+                    if (color.b < 205)
+                        color.b += 50;
+                    else
+                        color.b = 255;
+                }
+                scanlinePixels[pixelPos] = *((Uint32 *)&color);
+                
+            }
+            nametableX++;
+        }
+    }
+
+    for (int line = 0; line < 240; line++)
+    {
+        Uint32 *scanlinePixels = (Uint32 *)(debugnesPixels.get());
+        scanlinePixels += (line+240) * 512;
+
+        char nametableBytes[33];
+        char attributeTableBytes[9];
+
+        uint8_t nametable, nametableX, nametableY;
+        nametableX = 0;
+        nametableY = line / 8;
+        nametable = 2;
+        PPUGetNameTableBytes(nametable, nametableX, nametableY, nametableBytes);
+        PPUGetAttributeTableBytes(nametable, nametableX, nametableY, attributeTableBytes);
+
+        char nametableBytes2[33];
+        char attributeTableBytes2[9];
+        PPUGetNameTableBytes(nametable + 1, nametableX, nametableY, nametableBytes2);
+        PPUGetAttributeTableBytes(nametable + 1, nametableX, nametableY, attributeTableBytes2);
+
+        uint8_t yOffset = line % 8;
+
+        for (int i = 0; i < 32; i++)
+        {
+            uint8_t patternIndex = nametableBytes[i];
+            uint8_t firstByte = mapper->ReadPPU(patternIndex * 16 + yOffset + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
+            uint8_t secondByte = mapper->ReadPPU(patternIndex * 16 + yOffset + 8 + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
+
+            for (int j = 0; j < 8; j++)
+            {
+                uint8_t paletteIndex = 0;
+                if (firstByte & (1 << 7 - j))
+                    paletteIndex += 1;
+                if (secondByte & (1 << 7 - j))
+                    paletteIndex += 2;
+
+                int pixelPos = i * 8 + j;
+
+                uint8_t nesColor = GetBackgroundColor(attributeTableBytes[(i) / 4], nametableX, nametableY, paletteIndex);
+                RGB color = nesPalette[nesColor];
+                if (debugHighlightPixel[nametable][line][pixelPos])
+                {
+                    if (color.r < 205)
+                        color.r += 50;
+                    else
+                        color.r = 255;
+
+                    if (color.g < 205)
+                        color.g += 50;
+                    else
+                        color.g = 255;
+
+                    if (color.b < 205)
+                        color.b += 50;
+                    else
+                        color.b = 255;
+                }
+                scanlinePixels[pixelPos] = *((Uint32 *)&color);
+                
+            }
+            nametableX++;
+        }
+
+        for (int i = 0; i < 32; i++)
+        {
+            uint8_t patternIndex = nametableBytes2[i];
+            uint8_t firstByte = mapper->ReadPPU(patternIndex * 16 + yOffset + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
+            uint8_t secondByte = mapper->ReadPPU(patternIndex * 16 + yOffset + 8 + (PPUstatus.backgroundPatternTable ? 0x1000 : 0));
+
+            for (int j = 0; j < 8; j++)
+            {
+                uint8_t paletteIndex = 0;
+                if (firstByte & (1 << 7 - j))
+                    paletteIndex += 1;
+                if (secondByte & (1 << 7 - j))
+                    paletteIndex += 2;
+
+                int pixelPos = i * 8 + j + 256;
+                uint8_t nesColor = GetBackgroundColor(attributeTableBytes2[(i) / 4], nametableX, nametableY, paletteIndex);
+                RGB color = nesPalette[nesColor];
+                if (debugHighlightPixel[nametable+1][line][pixelPos-256])
+                {
+                    if (color.r < 205)
+                        color.r += 50;
+                    else
+                        color.r = 255;
+
+                    if (color.g < 205)
+                        color.g += 50;
+                    else
+                        color.g = 255;
+
+                    if (color.b < 205)
+                        color.b += 50;
+                    else
+                        color.b = 255;
+                }
+                scanlinePixels[pixelPos] = *((Uint32 *)&color);
+                
+            }
+            nametableX++;
+        }
+    }
+}*/

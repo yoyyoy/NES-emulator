@@ -269,6 +269,8 @@ private:
     void DebugPrintAttribute();
     void DebugPrintOAM();
 
+    //void DebugRenderAllNametables();
+
     std::unique_ptr<NESMapper> mapper;
 
     char nesMemory[0x10000];
@@ -295,6 +297,13 @@ private:
     std::unique_ptr<uint32_t[]> nesPixels;
     std::unique_ptr<uint8_t[]> audioData;
 
+    //debug window
+    /*
+    SDL_Window *debugWin;
+    SDL_Texture *debugnesTexture;
+    SDL_Renderer *debugRenderer;
+    std::unique_ptr<uint32_t[]> debugnesPixels;
+    */
     bool strobingControllers;
     uint8_t player1ReadCount;
     uint8_t player2ReadCount;
@@ -335,6 +344,7 @@ private:
     };
 
     bool debug = false;
+    //bool debugHighlightPixel[4][240][256];
     const RGB nesPalette[0x40] = {
         RGB{124,124,124,255},
         RGB{0,0,252,255},

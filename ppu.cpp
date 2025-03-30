@@ -135,11 +135,31 @@ void NES::PPURenderLine()
     char attributeTableBytes[9];
 
     uint8_t nametable, nametableX, nametableY;
+
     CalcNameTableCoords(nametable, nametableX, nametableY);
     PPUGetNameTableBytes(nametable, nametableX, nametableY, nametableBytes);
     PPUGetAttributeTableBytes(nametable, nametableX, nametableY, attributeTableBytes);
     uint8_t yOffset = (scanline + PPUstatus.Yscroll) % 8;
-    uint8_t nametableXOffset = PPUstatus.Xscroll %8;
+    //std::cout << "Rendering line: " << scanline << " nametable: " << (int)nametable << " Y: " << (int)nametableY << " offset: " << (int) yOffset << " Yscroll: " << (int) PPUstatus.Yscroll << "\n";
+    uint8_t nametableXOffset = PPUstatus.Xscroll % 8;
+
+    /*
+    for (int i = nametableX * 8 + nametableXOffset; i<256; i++)
+    {
+        debugHighlightPixel[nametable][nametableY * 8 + yOffset][i] = true;
+    }
+    uint8_t temp = nametable;
+    if (nametable & 1)
+        temp--;
+    else
+        temp++;
+    for (int i = 0; i < nametableX * 8 + nametableXOffset; i++)
+    {
+        debugHighlightPixel[temp][nametableY * 8 + yOffset][i] = true;
+    }
+    */
+
+
     uint8_t attributeTableXOffset = nametableX % 4;
     bool opaqueBackground[256] = { false };
 
@@ -286,6 +306,7 @@ void NES::CalcNameTableCoords(uint8_t &nameTable, uint8_t &x, uint8_t &y)
     x = (PPUstatus.Xscroll) / 8;
 
     y = (scanline + PPUstatus.Yscroll) / 8;
+
     if(y>=30)
     {
         y-=30;
@@ -417,7 +438,16 @@ void NES::PPUHandleRegisterWrite(uint8_t reg, uint8_t value)
             PPUstatus.tempAddress = value;
         }
         else
+        {
             PPUstatus.VRAMaddress = (((uint16_t)PPUstatus.tempAddress) << 8) | value;
+            if (scanline > 0 && scanline < numTotalLines - numVBlankLines)
+            {
+                PPUstatus.currentNameTable = (PPUstatus.VRAMaddress >> 10) & 0b11;
+                PPUstatus.Yscroll = (PPUstatus.VRAMaddress >> 5) & 0b11111;
+                PPUstatus.Yscroll <<=3;
+                PPUstatus.Yscroll-=scanline; 
+            }
+        }
         PPUstatus.firstRead = !PPUstatus.firstRead;
         break;
     case 7:

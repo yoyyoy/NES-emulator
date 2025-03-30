@@ -104,4 +104,5 @@ private:
     uint8_t shiftCount;
 
     std::filesystem::path savePath;
+    bool hasPersistent=false;
 };

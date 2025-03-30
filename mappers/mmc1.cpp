@@ -29,6 +29,7 @@ MMC1::MMC1(std::ifstream &romFile, Header header, const std::string& saveName)
 
     if(header.hasBatteryBackedRam)
     {
+        hasPersistent=true;
         savePath = "saves" + std::string{std::filesystem::path::preferred_separator} + saveName + ".sav";
         std::ifstream saveFile(savePath, std::ifstream::basic_ios::binary);
         if (!saveFile.is_open())
@@ -206,6 +207,8 @@ void MMC1::WritePPU(uint16_t address, uint8_t value)
 
 void MMC1::SaveGame()
 {
+    if(!hasPersistent)
+        return;
     std::ofstream saveFile(savePath, std::ifstream::basic_ios::binary);
     saveFile.write((char*)persistentMemory, 0x2000);
     if(saveFile.bad())
