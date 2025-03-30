@@ -52,7 +52,7 @@ Build the repo by running the following commands
 
 # Limitations
 
-With only NROM and MMC1 support, game selection is limited
-DMC audio is broken and has been silenced.
-Emulation is not clock accurate, things like Audio and Graphics are updated per scanline
-CPU clock cycles are not counted accurately
+ - With only NROM and MMC1 support, game selection is limited
+ - DMC audio is broken and has been silenced.
+ - Emulation is not clock accurate, things like Audio and Graphics are updated per scanline
+ - CPU clock cycles are not counted accurately
