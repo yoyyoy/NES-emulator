@@ -50,7 +50,7 @@ Build the repo by running the following commands
     cd NES-emulator
     g++ -std=c++17 -O3 src/*.cpp src/*/*.cpp -o NESemulator -lSDL2
 
-#Limitations
+# Limitations
 
 With only NROM and MMC1 support, game selection is limited
 DMC audio is broken and has been silenced.
