@@ -91,9 +91,7 @@ void NES::InitMemory(ifstream &romFile, string name)
 void UpdateAudioBuffer(void* userdata, Uint8* stream, int len)
 {
     NES* cast = (NES*)userdata;
-    cast->dataQueueLock.lock();
     cast->SDLAudioCallback(stream, len);
-    cast->dataQueueLock.unlock();
 }
 
 void NES::InitSDL()
@@ -769,19 +767,23 @@ void NES::DebugShowMemory(string page)
 
 void NES::Run()
 {
-    int frameCount=0;
-    int64_t skipInstructions=0;
-    bool skipFrame=false;
     bool running=true;
     SDL_Event ev;
-    
+    double CPUtime = 0;
+    double PPUtime = 0;
+    double Audiotime = 0;
+    double SDLtime = 0;
     chrono::time_point prevFrame = chrono::high_resolution_clock::now();
     while(running)
     {
-        //TODO handle IRQ from APU and potentially mapper
-        uint8_t opcode = Read8Bit(registers.programCounter, true);
 
+        //TODO handle IRQ from APU and potentially mapper
+        auto start = chrono::high_resolution_clock::now();
+        uint8_t opcode = Read8Bit(registers.programCounter, true);
         ExecuteStep(opcode);
+        auto end = chrono::high_resolution_clock::now();
+        CPUtime += chrono::duration<double, milli>(end - start).count();
+        /*
         if(skipInstructions<=0 && !skipFrame && debug)
         {
             string input = "";
@@ -807,17 +809,26 @@ void NES::Run()
                 cin >> input;
             }
         }
-        
+        */
         
         if(PPUcycles > PPUcyclesPerLine)
         {
             PPUcycles -= PPUcyclesPerLine;
             if(scanline < numTotalLines - numVBlankLines)
+            {
+                start = chrono::high_resolution_clock::now();
                 PPURenderLine();
+                end = chrono::high_resolution_clock::now();
+                PPUtime+= chrono::duration<double, milli>(end - start).count();
+            }
             
             scanline++;
             APUscanlineTiming+=2;
+            start = chrono::high_resolution_clock::now();
             UpdateAudio();
+            end = chrono::high_resolution_clock::now();
+            Audiotime += chrono::duration<double, milli>(end - start).count();
+
             if (scanline == numTotalLines - numVBlankLines)
             {
                 if (PPUstatus.doNMI)
@@ -828,7 +839,6 @@ void NES::Run()
                 }
 
                 PPUstatus.VBlanking = true;
-                skipFrame=false;
             }
             else if (scanline >= numTotalLines)
             {
@@ -836,10 +846,14 @@ void NES::Run()
                 PPUstatus.VBlanking = false;
                 PPUstatus.hitSprite0 = false;
                 PPUstatus.spriteOverflow = false;
-                //PPUstatus.VRAMaddress = 0x2000 + (PPUstatus.currentNameTable << 10) + (PPUstatus.Yscroll/8)*32 + PPUstatus.Xscroll/8 +scanline;
+
+                start = chrono::high_resolution_clock::now();
                 SDL_UpdateTexture(nesTexture, NULL, nesPixels.get(), 256 * sizeof(uint32_t));
                 SDL_RenderCopy(renderer, nesTexture, NULL, &stretchRect);
                 SDL_RenderPresent(renderer);
+                end = chrono::high_resolution_clock::now();
+                SDLtime += chrono::duration<double, milli>(end - start).count();
+
                 /*
                 DebugRenderAllNametables();
                 SDL_UpdateTexture(debugnesTexture, NULL, debugnesPixels.get(), 512*sizeof(uint32_t));
@@ -858,6 +872,7 @@ void NES::Run()
                     }
                 }
                 */
+                start = chrono::high_resolution_clock::now();
                 while (SDL_PollEvent(&ev) != 0)
                 {
                     switch (ev.type)
@@ -919,15 +934,24 @@ void NES::Run()
                         break;
                         }
                     break;
+                    }
+                    end = chrono::high_resolution_clock::now();
+                    SDLtime += chrono::duration<double, milli>(end - start).count();
                 }
+                end = chrono::high_resolution_clock::now();
+                if (chrono::duration<double, milli>(end - prevFrame).count() > msPerFrame)
+                {
+                    //cout << "Frame: " << chrono::duration<double, milli>(end - prevFrame).count() << "ms\n";
+                    //cout << "CPU time: " << CPUtime << "ms PPU time: " << PPUtime << "ms Audio time: " << Audiotime << "ms SDL time: " << SDLtime << "ms\n";
+                }
+                this_thread::sleep_until(prevFrame + chrono::microseconds(static_cast<int>(msPerFrame * 1000)));
+                prevFrame = chrono::high_resolution_clock::now();
+                CPUtime = 0;
+                PPUtime = 0;
+                Audiotime = 0;
+                SDLtime = 0;
             }
-            this_thread::sleep_until(prevFrame + chrono::microseconds(static_cast<int>(msPerFrame*1000)));
-            prevFrame = chrono::high_resolution_clock::now();
         }
-        }
-
-        skipInstructions--;
-        
     }
     mapper->SaveGame();
     SDL_DestroyWindow(win);

@@ -12,7 +12,7 @@ NROM::NROM(std::ifstream &romFile, Header header)
         memcpy(ROM + 0x4000, ROM, 0x4000);
 
     if(header.CHRROMsize!=1)
-    {
+    {//TODO 0 might mean it's ram
         std::cerr << "NROM file does not have correct CHRROM size\n";
         exit(14);
     }

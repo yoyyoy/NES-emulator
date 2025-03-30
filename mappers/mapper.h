@@ -106,3 +106,19 @@ private:
     std::filesystem::path savePath;
     bool hasPersistent=false;
 };
+
+class MMC3 : public NESMapper
+{
+public:
+    MMC3(std::ifstream &romFile, Header header, const std::string &saveName);
+
+    uint8_t ReadCPU(uint16_t address) override;
+    void WriteCPU(uint16_t address, uint8_t value) override;
+
+    uint8_t ReadPPU(uint16_t address) override;
+    void WritePPU(uint16_t address, uint8_t value) override;
+
+    void SaveGame() override;
+private:
+    
+};

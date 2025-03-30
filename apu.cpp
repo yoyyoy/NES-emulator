@@ -273,60 +273,64 @@ void NES::UpdateAudio()
 }
 
 void NES::UpdateDMC()
-{    
+{
     DMCClockCycles+=(header.isPAL ? 106 : 113);
     double samplesPerClock = 48000.0 * ((double)DMC.frequencyDecoded / (header.isPAL ? 1662607.0 : 1789773.0 ));
     while (DMCClockCycles >= DMC.frequencyDecoded)
     {
         DMCClockCycles-=DMC.frequencyDecoded;
-        while(DMC.waveformPos<samplesPerClock)
-        {
-            DMC.inProgressData.push_back(DMC.currentOutput);
-            DMC.waveformPos++;
-        }
-        DMC.waveformPos-=samplesPerClock;
-
-        //no playback if disabled
         if (!APUstatus.enableDMC)
-            continue;
-
-        if(DMC.shiftCounter==0)
-        {//get next byte
-            if(DMC.currentBytesRemaining==0)
-            {//but if there aren't any bytes remaining, do special logic
-                if(DMC.loop)
-                {
-                    DMC.currentBytesRemaining=DMC.sampleLength;
-                    DMC.addressOffset=0;
-                }
-                else if(DMC.IRQEnable)
-                {
-                    DMC.silentFlag=true;
-                    DMCinterrupt=true;
-                    continue;
-                }
+        {
+            while (DMC.waveformPos < samplesPerClock)
+            {
+                DMC.inProgressData.push_back(DMC.currentOutput);
+                DMC.waveformPos++;
             }
-            DMC.silentFlag=false;
-            int readAddress = 0xC000 + (DMC.sampleAddress * 64) + DMC.addressOffset++;
-            if (readAddress > 0xFFFF)
-                readAddress -= 0x8000;
-            DMC.sampleBuffer = Read8Bit(readAddress & 0xFFFF, false);
+            DMC.waveformPos -= samplesPerClock;
+            continue;
         }
+
+        if(DMC.currentBytesRemaining==0)
+        {//loop or send IRQ when sample ends;
+            if(DMC.loop)
+            {
+                DMC.currentBytesRemaining=DMC.sampleLength;
+                DMC.addressOffset=0;
+            }
+            else if(DMC.IRQEnable)
+            {
+                DMC.silentFlag=true;
+                DMCinterrupt=true;
+                continue;
+            }
+        }
+        DMC.currentBytesRemaining--;
+        DMC.silentFlag=false;
+        int readAddress = 0xC000 + (DMC.sampleAddress * 64) + DMC.addressOffset++;
+        if (readAddress > 0xFFFF)
+            readAddress -= 0x8000;
+        DMC.sampleBuffer = Read8Bit(readAddress & 0xFFFF, false);
+        
         
         if(!DMC.silentFlag)
         {
-            if ((DMC.sampleBuffer & 1) && DMC.currentOutput <= 125)
-                DMC.currentOutput += 2;
-            else if (!(DMC.sampleBuffer & 1) && DMC.currentOutput >= 2)
-                DMC.currentOutput -= 2;
+            for(int i=0; i<8; i++)
+            {
+                if ((DMC.sampleBuffer & 1) && DMC.currentOutput <= 125)
+                    DMC.currentOutput += 2;
+                else if ((!(DMC.sampleBuffer & 1)) && DMC.currentOutput >= 2)
+                    DMC.currentOutput -= 2;
+                double low = ((double)i / 8.0) * samplesPerClock;
+                double high = ((double)(i+1)/8.0) *samplesPerClock;
+                while (DMC.waveformPos >= low && DMC.waveformPos<high)
+                {
+                    DMC.inProgressData.push_back(DMC.currentOutput);
+                    DMC.waveformPos++;
+                }
+                DMC.sampleBuffer >>= 1;
+            }
         }
-
-        
-        DMC.sampleBuffer >>=1;
-        DMC.shiftCounter++;
-        if(DMC.shiftCounter>=8)
-            DMC.shiftCounter=0;
-        
+        DMC.waveformPos -= samplesPerClock;
     }
 }
 
@@ -565,13 +569,11 @@ void NES::MixAudio(uint8_t *pulse1Data, uint8_t *pulse2Data, uint8_t *triangleDa
 
     for (int i = 0; i < numSamples; i++)
     {
-        partialData[partialCounter++] = (uint16_t)(20000*(pulseOut.vals[pulse1Data[i]+pulse2Data[i]] + tndOut.vals[3*triangleData[i] + 2*noiseData[i]+DMC.inProgressData[i]]));
+        partialData[partialCounter++] = (uint16_t)(20000*(pulseOut.vals[pulse1Data[i]+pulse2Data[i]] + tndOut.vals[3*triangleData[i] + 2*noiseData[i]+(DMC.inProgressData[i]*0)]));
         
         if(partialCounter>=512)
         {
-            dataQueueLock.lock();
             audioDataQueue.push(partialData);
-            dataQueueLock.unlock();
             partialCounter=0;
         }
     }

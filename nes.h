@@ -20,7 +20,7 @@ public:
     
     void Run();
     void SDLAudioCallback(Uint8* stream, int len);
-    std::mutex dataQueueLock; 
+
 private:
 
     struct NESregisters

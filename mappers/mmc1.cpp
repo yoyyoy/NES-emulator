@@ -21,10 +21,10 @@ MMC1::MMC1(std::ifstream &romFile, Header header, const std::string& saveName)
         CHRBank1=1;
     }
 
-    for (int i = 0; i < header.CHRROMsize; i++)
+    for (int i = 0; i < header.CHRROMsize*2; i++)
     {
         VROMBanks.emplace_back();
-        romFile.read(VROMBanks.back().data(), 0x2000);
+        romFile.read(VROMBanks.back().data(), 0x1000);
     }
 
     if(header.hasBatteryBackedRam)
